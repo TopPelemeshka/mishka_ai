@@ -126,7 +126,13 @@ async def generate_mishka_response(
     # 4. Формируем историю для API-вызова
     history_for_gemini_call = [
         {"role": "user", "parts": [final_system_prompt]},
-        {"role": "model", "parts": ["Понял задачу. Я Мишка, готов общаться, помнить о друзьях и фактах, а также учитывать эмоциональный фон и контекст отношений."]}
+        {"role": "model", "parts": ["Понял задачу. Я Мишка, готов общаться. Инструменты использую только по прямому указанию."]},
+        # --- НОВЫЙ БЛОК: Добавляем "внушенный" пример ---
+        {"role": "user", "parts": ["Миш, как дела?"], "user_name": "Георгий", "user_id": "714790147"},
+        {"role": "model", "parts": ["Да все по-старому, берлогу свою виртуальную обустраиваю. Сам как?"]},
+        {"role": "user", "parts": ["Миша, покажи рейтинг"], "user_name": "Георгий", "user_id": "714790147"},
+        {"role": "model", "parts": ["```json\n{\"tool_name\": \"request_rating\", \"arguments\": {}}\n```"]}
+        # --- КОНЕЦ НОВОГО БЛОКА ---
     ]
     # Добавляем историю из STM (кроме последнего сообщения пользователя, которое пойдет как основной промпт)
     processed_short_term_history = short_term_memory.get_formatted_history(exclude_last_n=1) 

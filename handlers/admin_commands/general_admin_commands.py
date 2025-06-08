@@ -34,11 +34,11 @@ async def toggle_bot_active_command(update: Update, context: ContextTypes.DEFAUL
     new_status = not current_status
     context.bot_data["is_bot_active"] = new_status
 
-    # Формируем и отправляем ответ с новым статусом
-    status_text = "🟢 *Активен*" if new_status else "🔴 *Приостановлен (на паузе)*"
+    # Обновленный текст
+    status_text = "🟢 *АКТИВЕН*" if new_status else "🔴 *ПРИОСТАНОВЛЕН (PAUSED)*"
     await update.message.reply_text(
-        f"Статус бота изменен. Текущий статус: {status_text}\\n"
-        f"В режиме паузы бот не будет отвечать на обычные сообщения и выполнять анализ.",
+        f"Статус системы изменен. Текущий статус: {status_text}\n"
+        f"В режиме паузы основной цикл обработки сообщений деактивирован. Доступны только протоколы администратора.",
         parse_mode=constants.ParseMode.MARKDOWN
     )
-    logger.info(f"Администратор {update.effective_user.full_name} изменил статус бота на: {'активен' if new_status else 'приостановлен'}")
+    logger.info(f"Администратор {update.effective_user.full_name} изменил статус системы на: {'активен' if new_status else 'приостановлен'}")

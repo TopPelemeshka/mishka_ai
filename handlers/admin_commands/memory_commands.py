@@ -40,7 +40,7 @@ async def _format_facts_for_page(
     end_index = start_index + FACTS_PER_PAGE
     page_fact_items = sorted_fact_items[start_index:end_index]
 
-    if not page_fact_items: return "На этой странице фактов нет."
+    if not page_fact_items: return "\nНа этой странице данных нет."
     
     page_text_parts = []
     for fact_item in page_fact_items: 
@@ -68,13 +68,12 @@ async def _format_facts_for_page(
                 else:
                     user_names_to_display.append(f'{uid} (неизв.)')
         
-        user_info_str = f" (Польз: {escape_markdown(', '.join(user_names_to_display))})" if user_names_to_display else ""
+        user_info_str = f" (Субъекты: {escape_markdown(', '.join(user_names_to_display))})" if user_names_to_display else ""
         
-        # --- ИСПРАВЛЕНИЕ ЗДЕСЬ: \\n заменен на \n ---
-        entry = f"\n📝 *Факт ID:* `{fact_id}`\n"
-        entry += f"   Текст: _{escaped_fact_text}_ {user_info_str}\n" 
-        entry += f"   Добавлен: {escape_markdown(ts_added_str[:19])}\n" 
-        entry += f"   Доступ: {escape_markdown(ts_last_accessed_str[:19])} (x{access_count}) Важность: {importance:.2f}\n"
+        entry = f"\n*ID Факта:* `{fact_id}`\n"
+        entry += f"   *Текст:* _{escaped_fact_text}_{user_info_str}\n" 
+        entry += f"   *Добавлен:* {escape_markdown(ts_added_str[:19])}\n" 
+        entry += f"   *Доступ:* {escape_markdown(ts_last_accessed_str[:19])} (x{access_count}) *Важность:* {importance:.2f}\n"
         page_text_parts.append(entry)
         
     return "".join(page_text_parts)
@@ -82,16 +81,10 @@ async def _format_facts_for_page(
 def _calculate_cosine_similarity(vec1: list[float], vec2: list[float]) -> float:
     if vec1 is None or vec2 is None: 
         return 0.0
-    
     if not isinstance(vec1, (list, np.ndarray)) or not isinstance(vec2, (list, np.ndarray)):
         logger.warning(f"Попытка рассчитать сходство для не-списков/массивов: {type(vec1)}, {type(vec2)}")
         return 0.0
     
-    if isinstance(vec1, list) and not vec1: return 0.0
-    if isinstance(vec2, list) and not vec2: return 0.0
-    if isinstance(vec1, np.ndarray) and vec1.size == 0: return 0.0
-    if isinstance(vec2, np.ndarray) and vec2.size == 0: return 0.0
-
     vec1_np = np.array(vec1, dtype=np.float32)
     vec2_np = np.array(vec2, dtype=np.float32)
     
@@ -128,11 +121,11 @@ async def memory_stats_command(update: Update, context: ContextTypes.DEFAULT_TYP
     if memory_manager and memory_manager.emotional_memory_handler:
         num_emotional_records = len(memory_manager.emotional_memory_handler.emotional_memory)
 
-    stats_message = "📊 *Статистика Памяти Мишки* 🧠\\n\\n"
-    stats_message += f"👥 Известных пользователей: {num_known_users}\\n"
-    stats_message += f"📚 Фактов в долгосрочной памяти (LTM): {num_ltm_facts}\\n"
-    stats_message += f"💬 Сообщений в краткосрочной памяти: {short_term_memory_len}\\n"
-    stats_message += f"🎭 Записей в эмоциональной памяти: {num_emotional_records}\\n"
+    stats_message = "📊 *Отчет о состоянии системы памяти*\n\n"
+    stats_message += f"   *Известные субъекты:* {num_known_users} ед.\n"
+    stats_message += f"   *Факты в LTM:* {num_ltm_facts} записей\n"
+    stats_message += f"   *Записей в STM (буфер):* {short_term_memory_len} сообщений\n"
+    stats_message += f"   *Записи в Эмоц. Памяти:* {num_emotional_records} субъектов\n"
     
     await update.message.reply_text(stats_message, parse_mode=constants.ParseMode.MARKDOWN)
     logger.info(f"Администратор {update.effective_user.full_name} запросил статистику памяти.")
@@ -154,7 +147,7 @@ async def list_facts_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         all_facts_data = memory_manager.get_ltm_data(include=["metadatas"]) 
         
         if not all_facts_data or not all_facts_data.get("ids"):
-            await update.message.reply_text("В долгосрочной памяти пока нет фактов.")
+            await update.message.reply_text("В долгосрочной памяти (LTM) отсутствуют данные.")
             return
             
         facts_for_sorting = []
@@ -171,7 +164,7 @@ async def list_facts_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         total_facts = len(sorted_fact_items)
         if total_facts == 0:
-            await update.message.reply_text("В долгосрочной памяти пока нет фактов.")
+            await update.message.reply_text("В долгосрочной памяти (LTM) отсутствуют данные.")
             return
 
         total_pages = (total_facts + FACTS_PER_PAGE - 1) // FACTS_PER_PAGE
@@ -182,12 +175,12 @@ async def list_facts_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
         page_content = await _format_facts_for_page(memory_manager, sorted_fact_items, current_page, users_data)
         
-        header = f"📚 *Факты в LTM (Стр. {current_page}/{total_pages}, Всего: {total_facts}, сорт. по доступу/дате):*"
+        header = f"📚 *Содержимое LTM (Стр. {current_page}/{total_pages}, Всего: {total_facts}, сорт. по доступу/дате):*"
         message_text = header + page_content
         reply_markup = _get_facts_pagination_keyboard(current_page, total_pages)
         
         await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN)
-        logger.info(f"Админ {update.effective_user.full_name} запросил факты LTM (пагинация). Стр. {current_page}/{total_pages}")
+        logger.info(f"Админ {update.effective_user.full_name} запросил LTM (пагинация). Стр. {current_page}/{total_pages}")
 
     except Exception as e:
         logger.error(f"Ошибка в list_facts_command: {e}", exc_info=True)
@@ -214,39 +207,39 @@ async def facts_page_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
     total_pages = context.user_data.get('ltm_facts_total_pages') 
 
     if sorted_fact_items is None or total_pages is None:
-        await query.edit_message_text("Ошибка: Данные для пагинации LTM фактов устарели. /list_facts снова.", parse_mode=constants.ParseMode.MARKDOWN); return
+        await query.edit_message_text("Ошибка: Данные для пагинации устарели. Выполните /list_facts снова.", parse_mode=constants.ParseMode.MARKDOWN); return
 
     if not (1 <= requested_page <= total_pages):
-        logger.warning(f"Запрошена некорректная страница LTM фактов {requested_page} из {total_pages}.")
+        logger.warning(f"Запрошена некорректная страница LTM {requested_page} из {total_pages}.")
         await query.answer("Запрошена некорректная страница."); return
         
     current_page = requested_page
     try:
         page_content = await _format_facts_for_page(memory_manager, sorted_fact_items, current_page, users_data)
         total_facts = len(sorted_fact_items)
-        header = f"📚 *Факты в LTM (Стр. {current_page}/{total_pages}, Всего: {total_facts}, сорт. по доступу/дате):*"
+        header = f"📚 *Содержимое LTM (Стр. {current_page}/{total_pages}, Всего: {total_facts}, сорт. по доступу/дате):*"
         message_text = header + page_content
         reply_markup = _get_facts_pagination_keyboard(current_page, total_pages)
         
         if query.message and (query.message.text != message_text or query.message.reply_markup != reply_markup) :
             await query.edit_message_text(text=message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN)
-        else: logger.info(f"Текст и клавиатура для страницы {current_page} LTM фактов не изменились.")
-        logger.info(f"Админ {query.from_user.full_name} переключил страницу LTM фактов на {current_page}/{total_pages}")
+        else: logger.info(f"Текст и клавиатура для страницы {current_page} LTM не изменились.")
+        logger.info(f"Админ {query.from_user.full_name} переключил страницу LTM на {current_page}/{total_pages}")
     except Exception as e:
-        logger.error(f"Ошибка при обновлении страницы списка LTM фактов: {e}", exc_info=True)
-        try: await query.edit_message_text("Произошла ошибка при обновлении страницы LTM фактов.", parse_mode=constants.ParseMode.MARKDOWN)
+        logger.error(f"Ошибка при обновлении страницы списка LTM: {e}", exc_info=True)
+        try: await query.edit_message_text("Произошла ошибка при обновлении страницы LTM.", parse_mode=constants.ParseMode.MARKDOWN)
         except Exception: pass
 
 async def find_facts_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id_str = str(update.effective_user.id)
     admin_user_id = context.bot_data.get("admin_user_id")
     if not admin_user_id or user_id_str != admin_user_id: await update.message.reply_text("Эта команда доступна только администратору бота."); return
-    if not context.args: await update.message.reply_text("Укажи ключевые слова. `/find_facts встреча лена август`", parse_mode=constants.ParseMode.MARKDOWN); return
+    if not context.args: await update.message.reply_text("Использование: `/find_facts <текстовый запрос>`", parse_mode=constants.ParseMode.MARKDOWN); return
     
     query_text = " ".join(context.args)
     memory_manager: MemoryManager = context.bot_data.get("memory_manager")
     if not memory_manager or not memory_manager.yandex_embedder or not memory_manager.ltm_db:
-        await update.message.reply_text("Память или эмбеддер не готовы для поиска фактов.", parse_mode=constants.ParseMode.MARKDOWN); return
+        await update.message.reply_text("Система памяти или эмбеддер не готовы для поиска.", parse_mode=constants.ParseMode.MARKDOWN); return
     
     max_relevant_distance = context.bot_data.get("LTM_MAX_RELEVANT_DISTANCE_CONFIG", 1.0)
 
@@ -258,14 +251,14 @@ async def find_facts_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     )
 
     if not found_fact_texts:
-        await update.message.reply_text(f"Не найдено фактов, близких к: '{escape_markdown(query_text)}' (с порогом дистанции {max_relevant_distance}).", parse_mode=constants.ParseMode.MARKDOWN); return
+        await update.message.reply_text(f"Семантический поиск не дал результатов по запросу: '{escape_markdown(query_text)}' (дистанция < {max_relevant_distance}).", parse_mode=constants.ParseMode.MARKDOWN); return
 
-    response_text = f"🔎 *Найденные факты по запросу \\\"{escape_markdown(query_text)}\\\" ({len(found_fact_texts)} шт.):*\\n\\n"
+    response_text = f"🔎 *Результаты семантического поиска по запросу \"{escape_markdown(query_text)}\":*\n\n"
     for i, fact_text in enumerate(found_fact_texts):
-        response_text += f"{i+1}. _{escape_markdown(fact_text)}_\\n\\n" 
+        response_text += f"`{i+1}.` _{escape_markdown(fact_text)}_\n\n" 
     
     if len(response_text) > 4000: 
-        await update.message.reply_text("Найдено много, показываю первые:\\n" + response_text[:3900] + "\\n...", parse_mode=constants.ParseMode.MARKDOWN)
+        await update.message.reply_text("Найдено много, показываю первые:\n" + response_text[:3900] + "\n...", parse_mode=constants.ParseMode.MARKDOWN)
     else:
         await update.message.reply_text(response_text, parse_mode=constants.ParseMode.MARKDOWN)
     logger.info(f"Админ {update.effective_user.full_name} искал факты: '{query_text}'. Найдено: {len(found_fact_texts)}")
@@ -277,33 +270,32 @@ async def delete_fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("Эта команда доступна только администратору бота."); return
 
     if not context.args or len(context.args) != 1:
-        await update.message.reply_text("Укажи ID факта. `/delete_fact <ID_факта>`", parse_mode=constants.ParseMode.MARKDOWN); return
+        await update.message.reply_text("Использование: `/delete_fact <ID_факта>`", parse_mode=constants.ParseMode.MARKDOWN); return
 
     fact_id_to_delete = context.args[0]
     memory_manager: MemoryManager = context.bot_data.get("memory_manager") 
 
     if not memory_manager or not memory_manager.ltm_db:
-        await update.message.reply_text("Долгосрочная память LTM не инициализирована.", parse_mode=constants.ParseMode.MARKDOWN); return
+        await update.message.reply_text("Долгосрочная память (LTM) не инициализирована.", parse_mode=constants.ParseMode.MARKDOWN); return
     
     try:
+        # <--- ВОССТАНОВЛЕНО: Получение текста факта перед удалением ---
         fact_data = memory_manager.get_ltm_data(ids=[fact_id_to_delete], include=["metadatas"])
-        fact_text_to_delete = "N/A (текст не найден или факт уже удален)"
-        if fact_data and fact_data.get("ids") and fact_data.get("metadatas") and fact_data["metadatas"] and fact_data["metadatas"][0]:
-            fact_text_to_delete = fact_data["metadatas"][0].get("text_original", "N/A (текст не извлечен из метаданных)")
-        elif fact_data and fact_data.get("ids"):
-             logger.warning(f"Факт ID {fact_id_to_delete} найден, но текст не извлечен из метаданных. Метаданные: {fact_data.get('metadatas')}")
-        else: 
-            await update.message.reply_text(f"Факт ID `{escape_markdown(fact_id_to_delete)}` не найден в LTM.", parse_mode=constants.ParseMode.MARKDOWN); return
+        fact_text_to_delete = "N/A"
+        if fact_data and fact_data.get("ids") and fact_data.get("metadatas") and fact_data["metadatas"][0]:
+            fact_text_to_delete = fact_data["metadatas"][0].get("text_original", "N/A")
+        elif not (fact_data and fact_data.get("ids")):
+            await update.message.reply_text(f"Факт с ID `{escape_markdown(fact_id_to_delete)}` не найден в LTM.", parse_mode=constants.ParseMode.MARKDOWN); return
 
         success = memory_manager.delete_ltm_facts_by_ids(ids=[fact_id_to_delete])
         
         if success:
             if 'sorted_ltm_fact_items' in context.user_data: del context.user_data['sorted_ltm_fact_items']
             if 'ltm_facts_total_pages' in context.user_data: del context.user_data['ltm_facts_total_pages']
-            await update.message.reply_text(f"Факт ID `{escape_markdown(fact_id_to_delete)}` (Текст: _{escape_markdown(fact_text_to_delete)}_) удален из LTM. Пагинация сброшена, /list_facts заново.", parse_mode=constants.ParseMode.MARKDOWN)
+            await update.message.reply_text(f"✅ *Факт удален.*\nID: `{escape_markdown(fact_id_to_delete)}`\nТекст: _{escape_markdown(fact_text_to_delete)}_\n\nКэш пагинации сброшен. Для просмотра используйте `/list_facts`.", parse_mode=constants.ParseMode.MARKDOWN)
             logger.info(f"Админ {update.effective_user.full_name} удалил факт ID: {fact_id_to_delete} из LTM.")
         else:
-            await update.message.reply_text(f"Не удалось удалить факт ID `{escape_markdown(fact_id_to_delete)}` из LTM (возможно, он уже был удален или ошибка БД).", parse_mode=constants.ParseMode.MARKDOWN)
+            await update.message.reply_text(f"❌ *Ошибка удаления.* Не удалось удалить факт ID `{escape_markdown(fact_id_to_delete)}`. Возможно, он уже был удален.", parse_mode=constants.ParseMode.MARKDOWN)
     except Exception as e:
         logger.error(f"Ошибка при удалении факта ID {fact_id_to_delete} из LTM: {e}", exc_info=True)
         await update.message.reply_text(f"Ошибка при удалении факта из LTM: {e}")
@@ -314,11 +306,13 @@ async def clear_ltm_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if not admin_user_id or user_id_str != admin_user_id:
         await update.message.reply_text("Эта команда доступна только администратору бота."); return
 
-    keyboard = [[ InlineKeyboardButton("🔴 Да, ОЧИСТИТЬ ВСЕ ФАКТЫ LTM!", callback_data="confirm_clear_ltm_yes"),
-                  InlineKeyboardButton("🟢 Нет, отмена", callback_data="confirm_clear_ltm_no")]]
+    keyboard = [[
+        InlineKeyboardButton("🔴 ПОДТВЕРДИТЬ ОЧИСТКУ LTM", callback_data="confirm_clear_ltm_yes"),
+        InlineKeyboardButton("🟢 Отмена", callback_data="confirm_clear_ltm_no")
+    ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "⚠️ *ВНИМАНИЕ!* ⚠️\\nВы уверены, что хотите *ПОЛНОСТЬЮ ОЧИСТИТЬ* всю долгосрочную память (все факты LTM)?\\n*Это действие НЕОБРАТИМО!*",
+        "‼️ *КРИТИЧЕСКОЕ ДЕЙСТВИЕ* ‼️\nВы собираетесь инициировать протокол полной очистки Долгосрочной Памяти (LTM).\n\n*Это действие необратимо и приведет к потере всех сохраненных фактов.* Подтвердите операцию.",
         reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN)
     logger.info(f"Админ {update.effective_user.full_name} инициировал очистку ВСЕХ фактов LTM.")
 
@@ -341,8 +335,7 @@ async def confirm_clear_ltm_callback(update: Update, context: ContextTypes.DEFAU
             if success:
                 if 'sorted_ltm_fact_items' in context.user_data: del context.user_data['sorted_ltm_fact_items']
                 if 'ltm_facts_total_pages' in context.user_data: del context.user_data['ltm_facts_total_pages']
-                logger.info("Кэш пагинации LTM фактов очищен.")
-                await query.edit_message_text("✅ Долгосрочная память (LTM факты) *полностью очищена*.", parse_mode=constants.ParseMode.MARKDOWN)
+                await query.edit_message_text("✅ *Протокол выполнен.* Долгосрочная Память (LTM) полностью очищена.", parse_mode=constants.ParseMode.MARKDOWN)
                 logger.warning(f"LTM факты очищены админом {query.from_user.full_name}.")
             else:
                 await query.edit_message_text("❌ Не удалось полностью очистить LTM факты. Проверьте логи.", parse_mode=constants.ParseMode.MARKDOWN)
@@ -350,10 +343,8 @@ async def confirm_clear_ltm_callback(update: Update, context: ContextTypes.DEFAU
             logger.error(f"Ошибка при полной очистке LTM фактов: {e}", exc_info=True)
             await query.edit_message_text(f"❌ Ошибка очистки LTM фактов: {escape_markdown(str(e))}", parse_mode=constants.ParseMode.MARKDOWN)
     elif choice == "confirm_clear_ltm_no":
-        await query.edit_message_text("👌 Очистка LTM фактов отменена.", parse_mode=constants.ParseMode.MARKDOWN)
+        await query.edit_message_text("👌 *Операция отменена.* Очистка LTM не производилась.", parse_mode=constants.ParseMode.MARKDOWN)
         logger.info(f"Админ {query.from_user.full_name} отменил очистку LTM фактов.")
-    else:
-        await query.edit_message_text("Неизвестный выбор.", parse_mode=constants.ParseMode.MARKDOWN)
 
 async def clear_emotional_user_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id_str = str(update.effective_user.id)
@@ -364,8 +355,8 @@ async def clear_emotional_user_command(update: Update, context: ContextTypes.DEF
 
     if not context.args:
         await update.message.reply_text(
-            "Укажите ID, имя или ник пользователя, чью эмоциональную память нужно очистить.\\n"
-            "Например: `/clear_emo_user 123456789` или `/clear_emo_user Георгий`",
+            "Укажите ID, имя или ник субъекта, чью эмоциональную память (EM) нужно очистить.\n"
+            "Пример: `/clear_emo_user 123456789`",
             parse_mode=constants.ParseMode.MARKDOWN
         )
         return
@@ -379,7 +370,7 @@ async def clear_emotional_user_command(update: Update, context: ContextTypes.DEF
         return
 
     found_user_id_to_clear = None
-    found_user_name_to_clear = "Неизвестный пользователь"
+    found_user_name_to_clear = "Неизвестный субъект"
 
     for u_id, info in users_data.items():
         name_lower = info.get('name', '').lower()
@@ -392,6 +383,7 @@ async def clear_emotional_user_command(update: Update, context: ContextTypes.DEF
             found_user_name_to_clear = info.get('name', f"User_{u_id}")
             break
     
+    # <--- ВОССТАНОВЛЕНО: Поиск по ID в эмоциональной памяти, если не найден в users.json ---
     if not found_user_id_to_clear and query_arg.isdigit():
         emo_data_exists = memory_manager.get_emotional_notes(query_arg)
         if emo_data_exists:
@@ -399,7 +391,7 @@ async def clear_emotional_user_command(update: Update, context: ContextTypes.DEF
              found_user_name_to_clear = emo_data_exists.get("name", f"User_{query_arg}")
         
     if not found_user_id_to_clear:
-        await update.message.reply_text(f"Пользователь по запросу '{escape_markdown(query_arg)}' не найден в известных пользователях или его эмоциональной памяти.")
+        await update.message.reply_text(f"Субъект по запросу '{escape_markdown(query_arg)}' не найден.")
         return
 
     keyboard = [[
@@ -408,12 +400,12 @@ async def clear_emotional_user_command(update: Update, context: ContextTypes.DEF
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        f"Вы уверены, что хотите очистить всю эмоциональную память для пользователя *{escape_markdown(found_user_name_to_clear)}* (ID: `{found_user_id_to_clear}`)?\\n"
+        f"Подтвердите очистку всей эмоциональной памяти для субъекта *{escape_markdown(found_user_name_to_clear)}* (ID: `{found_user_id_to_clear}`).\n"
         f"Это действие необратимо.",
         reply_markup=reply_markup,
         parse_mode=constants.ParseMode.MARKDOWN
     )
-    logger.info(f"Админ {update.effective_user.full_name} инициировал очистку эмоциональной памяти для пользователя ID: {found_user_id_to_clear} ({found_user_name_to_clear}).")
+    logger.info(f"Админ {update.effective_user.full_name} инициировал очистку EM для ID: {found_user_id_to_clear}.")
 
 async def confirm_clear_emotional_user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -446,19 +438,11 @@ async def confirm_clear_emotional_user_callback(update: Update, context: Context
     if action == "yes":
         success = memory_manager.clear_user_emotional_data(user_id_to_clear)
         if success:
-            await query.edit_message_text(
-                f"✅ Эмоциональная память для пользователя *{escape_markdown(user_name_display)}* (ID: `{user_id_to_clear}`) *полностью очищена*.",
-                parse_mode=constants.ParseMode.MARKDOWN
-            )
-            logger.warning(f"Эмоциональная память для пользователя {user_id_to_clear} ({user_name_display}) очищена админом {query.from_user.full_name}.")
+            await query.edit_message_text(f"✅ *Операция выполнена.* Эмоциональная память для *{escape_markdown(user_name_display)}* очищена.", parse_mode=constants.ParseMode.MARKDOWN)
         else:
-            await query.edit_message_text(
-                f"❌ Не удалось очистить эмоциональную память для пользователя *{escape_markdown(user_name_display)}* (ID: `{user_id_to_clear}`). Возможно, для него не было записей.",
-                parse_mode=constants.ParseMode.MARKDOWN
-            )
+            await query.edit_message_text(f"❌ *Ошибка.* Не удалось очистить EM для *{escape_markdown(user_name_display)}*.", parse_mode=constants.ParseMode.MARKDOWN)
     elif action == "no":
-        await query.edit_message_text(f"👌 Очистка эмоциональной памяти для *{escape_markdown(user_name_display)}* (ID: `{user_id_to_clear}`) отменена.", parse_mode=constants.ParseMode.MARKDOWN)
-        logger.info(f"Админ {query.from_user.full_name} отменил очистку эмоциональной памяти для {user_id_to_clear}.")
+        await query.edit_message_text(f"👌 *Операция отменена.* EM для *{escape_markdown(user_name_display)}* не затронута.", parse_mode=constants.ParseMode.MARKDOWN)
     else:
         await query.edit_message_text("Неизвестный выбор.")
 
@@ -470,17 +454,17 @@ async def clear_emotional_all_danger_command(update: Update, context: ContextTyp
         return
 
     keyboard = [[
-        InlineKeyboardButton("🔴 Да, ОЧИСТИТЬ ВСЮ ЭМОЦ. ПАМЯТЬ!", callback_data="confirm_clear_emo_all_yes"),
-        InlineKeyboardButton("🟢 Нет, отмена", callback_data="confirm_clear_emo_all_no")
+        InlineKeyboardButton("🔴 ПОДТВЕРДИТЬ ОЧИСТКУ ВСЕЙ EM", callback_data="confirm_clear_emo_all_yes"),
+        InlineKeyboardButton("🟢 Отмена", callback_data="confirm_clear_emo_all_no")
     ]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
-        "⚠️ *ВНИМАНИЕ!* ⚠️\\nВы уверены, что хотите *ПОЛНОСТЬЮ ОЧИСТИТЬ ВСЮ ЭМОЦИОНАЛЬНУЮ ПАМЯТЬ* (для всех пользователей)?\\n"
+        "‼️ *КРИТИЧЕСКОЕ ДЕЙСТВИЕ* ‼️\nВы уверены, что хотите *ПОЛНОСТЬЮ ОЧИСТИТЬ ВСЮ ЭМОЦИОНАЛЬНУЮ ПАМЯТЬ* (для всех субъектов)?\n"
         "*Это действие НЕОБРАТИМО!*",
         reply_markup=reply_markup,
         parse_mode=constants.ParseMode.MARKDOWN
     )
-    logger.info(f"Админ {update.effective_user.full_name} инициировал очистку ВСЕЙ эмоциональной памяти.")
+    logger.info(f"Админ {update.effective_user.full_name} инициировал очистку ВСЕЙ EM.")
 
 async def confirm_clear_emotional_all_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
@@ -501,25 +485,17 @@ async def confirm_clear_emotional_all_callback(update: Update, context: ContextT
 
     if choice == "confirm_clear_emo_all_yes":
         try:
-            logger.warning(f"Админ {query.from_user.full_name} подтвердил очистку ВСЕЙ эмоциональной памяти.")
+            logger.warning(f"Админ {query.from_user.full_name} подтвердил очистку ВСЕЙ EM.")
             success = memory_manager.clear_all_emotional_data()
             if success:
-                await query.edit_message_text(
-                    "✅ Вся эмоциональная память (для всех пользователей) *полностью очищена*.",
-                    parse_mode=constants.ParseMode.MARKDOWN
-                )
-                logger.warning(f"Вся эмоциональная память очищена админом {query.from_user.full_name}.")
+                await query.edit_message_text("✅ *Протокол выполнен.* Вся эмоциональная память (EM) полностью очищена.", parse_mode=constants.ParseMode.MARKDOWN)
             else:
-                await query.edit_message_text(
-                    "❌ Не удалось полностью очистить всю эмоциональную память. Проверьте логи.",
-                    parse_mode=constants.ParseMode.MARKDOWN
-                )
+                await query.edit_message_text("❌ Не удалось полностью очистить всю EM. Проверьте логи.", parse_mode=constants.ParseMode.MARKDOWN)
         except Exception as e:
-            logger.error(f"Ошибка при полной очистке всей эмоциональной памяти: {e}", exc_info=True)
-            await query.edit_message_text(f"❌ Ошибка очистки всей эмоциональной памяти: {escape_markdown(str(e))}", parse_mode=constants.ParseMode.MARKDOWN)
+            logger.error(f"Ошибка при полной очистке всей EM: {e}", exc_info=True)
+            await query.edit_message_text(f"❌ Ошибка очистки всей EM: {escape_markdown(str(e))}", parse_mode=constants.ParseMode.MARKDOWN)
     elif choice == "confirm_clear_emo_all_no":
-        await query.edit_message_text("👌 Очистка всей эмоциональной памяти отменена.", parse_mode=constants.ParseMode.MARKDOWN)
-        logger.info(f"Админ {query.from_user.full_name} отменил очистку всей эмоциональной памяти.")
+        await query.edit_message_text("👌 *Операция отменена.* Очистка всей EM не производилась.", parse_mode=constants.ParseMode.MARKDOWN)
     else:
         await query.edit_message_text("Неизвестный выбор.")
 
@@ -532,15 +508,14 @@ async def maintain_ltm_command(update: Update, context: ContextTypes.DEFAULT_TYP
 
     memory_manager: MemoryManager = context.bot_data.get("memory_manager")
     if not memory_manager or not memory_manager.ltm_db or not memory_manager.yandex_embedder:
-        await update.message.reply_text("LTM, база данных или эмбеддер не инициализированы. Обслуживание невозможно.")
+        await update.message.reply_text("LTM или эмбеддер не инициализированы. Обслуживание невозможно.")
         return
 
-    await update.message.reply_text("⏳ Начинаю обслуживание долговременной памяти (LTM)... Это может занять некоторое время. Я сообщу о результате.", 
+    await update.message.reply_text("⏳ *Запуск протокола обслуживания LTM...*\nАнализ и оптимизация базы данных. Отчет будет предоставлен по завершении.", 
                                     parse_mode=constants.ParseMode.MARKDOWN)
     
     try:
         args = context.args
-        # Собираем параметры для передачи в MemoryManager
         maintenance_config = {
             "similarity_threshold": float(args[0]) if args and len(args) > 0 else 0.95,
             "max_days_unaccessed": int(args[1]) if args and len(args) > 1 else 90,
@@ -552,33 +527,31 @@ async def maintain_ltm_command(update: Update, context: ContextTypes.DEFAULT_TYP
         
         logger.info(f"Админ {update.effective_user.full_name} запустил обслуживание LTM с параметрами: {maintenance_config}")
         
-        # Вызываем новый метод из MemoryManager
         results = await memory_manager.perform_ltm_maintenance(maintenance_config)
 
         if results.get("error"):
             await update.message.reply_text(f"❌ Ошибка во время обслуживания LTM: {results['error']}")
             return
             
-        # Очистка кэша пагинации, если что-то изменилось
         if results.get("total_deleted", 0) > 0 or results.get("updated_importance", 0) > 0:
             if 'sorted_ltm_fact_items' in context.user_data: del context.user_data['sorted_ltm_fact_items']
             if 'ltm_facts_total_pages' in context.user_data: del context.user_data['ltm_facts_total_pages']
 
-        # Формируем и отправляем отчет
         deleted_duplicates = results.get("deleted_duplicates", 0)
         deleted_obsolete = results.get("deleted_obsolete", 0)
         total_deleted = results.get("total_deleted", 0)
         updated_importance = results.get("updated_importance", 0)
 
         if total_deleted == 0 and updated_importance == 0:
-            await update.message.reply_text("✅ Обслуживание LTM завершено. Фактов для удаления или обновления не найдено.", parse_mode=constants.ParseMode.MARKDOWN)
+            await update.message.reply_text("✅ *Обслуживание LTM завершено.* Оптимизация не потребовалась, данные в актуальном состоянии.", parse_mode=constants.ParseMode.MARKDOWN)
         else:
             await update.message.reply_text(
-                f"✅ Обслуживание LTM завершено.\\n"
-                f"- Удалено дубликатов/схожих: {deleted_duplicates}\\n"
-                f"- Удалено устаревших/неважных: {deleted_obsolete}\\n"
-                f"- *Всего уникальных фактов удалено:* {total_deleted}\\n"
-                f"- *Обновлена важность у:* {updated_importance} фактов.",
+                f"✅ *Обслуживание LTM завершено.*\n\n"
+                f"   *Оптимизация:*\n"
+                f"   - Устранено дубликатов/схожих: {deleted_duplicates}\n"
+                f"   - Удалено устаревших/неважных: {deleted_obsolete}\n"
+                f"   - *Всего записей удалено:* {total_deleted}\n"
+                f"   - *Пересчитана важность (decay):* {updated_importance} фактов.",
                 parse_mode=constants.ParseMode.MARKDOWN
             )
 

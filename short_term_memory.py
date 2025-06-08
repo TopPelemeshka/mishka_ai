@@ -10,7 +10,7 @@ class ShortTermMemory:
         self.max_length = max_length
         logger.info(f"Краткосрочная память инициализирована с размером {max_length}")
 
-    def add_message(self, role: str, text: str, user_name: str = None, user_id: str = None): # <--- Добавлен user_id
+    def add_message(self, role: str, text: str, user_name: str = None, user_id: str = None, is_bot: bool = False):
         """
         Добавляет сообщение в историю.
         Args:
@@ -18,19 +18,25 @@ class ShortTermMemory:
             text: Текст сообщения.
             user_name: Имя пользователя (для логов или форматирования).
             user_id: ID пользователя (для сообщений 'user').
+            is_bot: Флаг, указывающий, что сообщение от бота.
         """
         if not role or not text:
             logger.warning("Попытка добавить пустое сообщение в краткосрочную память.")
             return
         
         message_entry = {"role": role, "parts": [text]}
-        if user_name:
-            message_entry["user_name"] = user_name # Для отображения в промпте извлечения фактов
+        
+        # Если сообщение от другого бота, помечаем его как "user", но с особым именем
+        if role == "user" and is_bot:
+             message_entry["user_name"] = f"Бот {user_name}"
+        elif user_name:
+            message_entry["user_name"] = user_name
+
         if role == "user" and user_id:
-            message_entry["user_id"] = user_id # <--- Сохраняем user_id
+            message_entry["user_id"] = user_id
 
         self.history.append(message_entry)
-        log_user_info = f" ({user_name or 'N/A'}{f', ID: {user_id}' if user_id else ''})" if role == "user" else ""
+        log_user_info = f" ({user_name or 'N/A'}{f', ID: {user_id}' if user_id else ''}{', is_bot' if is_bot else ''})" if role == "user" else ""
         logger.debug(f"Добавлено в short_term_memory (role: {role}{log_user_info}): {text[:50]}...")
 
     def get_formatted_history(self, exclude_last_n: int = 0) -> list:

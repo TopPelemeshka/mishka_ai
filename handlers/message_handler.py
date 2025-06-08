@@ -34,6 +34,33 @@ MISHKA_MENTION_PATTERN_STR = r"^(?:(" + "|".join(re.escape(trigger) for trigger 
 MISHKA_MENTION_REGEX = re.compile(MISHKA_MENTION_PATTERN_STR, re.IGNORECASE)
 
 
+async def _parse_tool_call(response_text: str) -> dict | None:
+    """Пытается распарсить JSON для вызова инструмента из ответа LLM.
+    Обрабатывает как 'голый' JSON, так и обернутый в ```json ... ```."""
+    
+    clean_text = response_text.strip()
+    
+    # Сначала ищем JSON, обернутый в блок кода
+    match = re.search(r"```json\s*(\{.*?\})\s*```", clean_text, re.DOTALL)
+    if match:
+        json_str = match.group(1)
+    # Если не нашли, и текст похож на 'голый' JSON, используем его
+    elif clean_text.startswith('{') and clean_text.endswith('}'):
+        json_str = clean_text
+    else:
+        return None
+
+    try:
+        data = json.loads(json_str)
+        if isinstance(data, dict) and "tool_name" in data:
+            logger.info(f"Обнаружен вызов инструмента: {data}")
+            return data
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.warning(f"Ошибка парсинга JSON для вызова инструмента: {e}. Строка для парсинга: {json_str[:200]}")
+    
+    return None
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Основной обработчик текстовых сообщений.
@@ -57,7 +84,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     current_chat_id = update.effective_chat.id
     
     if target_chat_id is not None and current_chat_id != target_chat_id:
-        # Игнорируем сообщения из других чатов, но разрешаем админу использовать команды
         is_admin_sender = str(update.effective_user.id) == context.bot_data.get("admin_user_id")
         if not (is_admin_sender and update.message.text.startswith("/")):
             logger.info(f"Сообщение из чата {current_chat_id} проигнорировано (целевой чат: {target_chat_id}).")
@@ -69,7 +95,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     # --- Проверка 2: Активность бота ---
     is_bot_active = context.bot_data.get("is_bot_active", True)
     if not is_bot_active:
-        # Если бот на паузе, игнорируем все, кроме команд от администратора
         is_admin_sender = str(update.effective_user.id) == context.bot_data.get("admin_user_id")
         if not (is_admin_sender and update.message.text.startswith("/")):
             logger.info(f"Бот неактивен. Сообщение от {update.effective_user.full_name} проигнорировано.")
@@ -95,7 +120,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 mishka_system_prompt_template_str,
                 all_prompts_data 
                 ]): 
-        # Собираем информацию о недостающих компонентах для лога
         missing_components = [name for name, val in {
             "GeminiChatClient": gemini_chat_client, "GeminiAnalysisClient": gemini_analysis_client,
             "ShortTermMemory": short_term_memory, "MemoryManager": memory_manager,
@@ -111,53 +135,50 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     user_message_text = update.message.text
     user = update.effective_user
     user_id_str = str(user.id)
-    
-    # Добавляем или обновляем пользователя в базе, если необходимо
-    if _add_new_user_if_needed(user, current_users_data, context): 
-        logger.info(f"Данные пользователя {user.full_name} (ID: {user_id_str}) были добавлены/обновлены и сохранены. ID обновления: {update.update_id}")
+    is_from_bot = user.is_bot
+
+    if is_from_bot and user.id == context.bot.id:
+        logger.info("Сообщение от самого себя проигнорировано.")
+        return
+
+    if not is_from_bot:
+        if _add_new_user_if_needed(user, current_users_data, context): 
+            logger.info(f"Данные пользователя {user.full_name} (ID: {user_id_str}) были добавлены/обновлены и сохранены. ID обновления: {update.update_id}")
 
     user_name_for_log = current_users_data.get(user_id_str, {}).get("name", user.full_name)
     
-    # Определяем, нужно ли обрабатывать сообщение для STM и триггеров.
-    # Это происходит, только если бот активен и в нужном чате.
     should_process_stm_and_triggers = is_bot_active and (target_chat_id is None or current_chat_id == target_chat_id)
     
     if should_process_stm_and_triggers:
-        # Добавляем сообщение в краткосрочную память
         short_term_memory.add_message(
             role="user", 
             text=user_message_text, 
             user_name=user_name_for_log, 
-            user_id=user_id_str
+            user_id=user_id_str,
+            is_bot=is_from_bot
         )
         
-        # Инкрементируем счетчик сообщений, который используется для отложенного запуска извлечения фактов
-        user_message_count_for_fact_extraction_trigger += 1
-        context.bot_data["user_message_count_for_fact_extraction_trigger"] = user_message_count_for_fact_extraction_trigger
-        logger.info(f"Счетчик сообщений пользователя для извлечения фактов: {user_message_count_for_fact_extraction_trigger}. Пользователь: {user_name_for_log}")
+        if not is_from_bot:
+            user_message_count_for_fact_extraction_trigger += 1
+            context.bot_data["user_message_count_for_fact_extraction_trigger"] = user_message_count_for_fact_extraction_trigger
+            logger.info(f"Счетчик сообщений пользователя для извлечения фактов: {user_message_count_for_fact_extraction_trigger}. Пользователь: {user_name_for_log}")
 
     # --- Логика реакции бота ---
-    processed_text_for_mention_check = user_message_text.lstrip()
-    direct_mention_match_obj = MISHKA_MENTION_REGEX.match(processed_text_for_mention_check)
+    direct_mention_match_obj = MISHKA_MENTION_REGEX.match(user_message_text.lstrip())
     is_direct_mention_match = bool(direct_mention_match_obj)
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
 
-    # Бот отвечает, только если к нему обратились напрямую или ответили на его сообщение,
-    # и при этом он активен и находится в правильном чате.
-    if (is_direct_mention_match or is_reply_to_bot) and should_process_stm_and_triggers:
+    if not is_from_bot and (is_direct_mention_match or is_reply_to_bot) and should_process_stm_and_triggers:
         mention_type = "прямое упоминание" if is_direct_mention_match else "ответ боту"
-        matched_alias = direct_mention_match_obj.group(1) if is_direct_mention_match and direct_mention_match_obj.group(1) else "N/A"
-
-        logger.info(f"Обнаружено {mention_type} Мишки от {user_name_for_log}. Текст: '{user_message_text}'. Обращение: '{matched_alias}'")
+        
+        logger.info(f"Обнаружено {mention_type} Мишки от {user_name_for_log}. Текст: '{user_message_text}'.")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
-        # Собираем ID всех пользователей, вовлеченных в сообщение (автор и тот, кому отвечают)
         involved_user_ids = {user_id_str}
         if update.message.reply_to_message and update.message.reply_to_message.from_user:
             involved_user_ids.add(str(update.message.reply_to_message.from_user.id))
 
-        # Генерируем ответ
-        bot_response_text_raw = await generate_mishka_response(
+        bot_response_raw = await generate_mishka_response(
             user_message_text=user_message_text, 
             user_id_str=user_id_str,
             current_users_data=current_users_data,
@@ -169,25 +190,56 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             context=context
         )
 
-        if bot_response_text_raw:
-            # Системный промпт просит Gemini не использовать Markdown, но на всякий случай экранируем
-            bot_response_text_escaped = escape_markdown(bot_response_text_raw)
-            logger.info(f"Ответ Gemini (сырой): '{bot_response_text_raw[:100]}...'")
+        if not bot_response_raw:
+            logger.warning("generate_mishka_response вернул пустой ответ.")
+            return
+
+        tool_call_data = await _parse_tool_call(bot_response_raw)
+
+        if tool_call_data:
+            tool_name = tool_call_data.get("tool_name")
+            arguments = tool_call_data.get("arguments", {})
+            
+            await update.message.reply_text("Секундочку, сейчас сделаю...")
+
+            command_to_send = "" # <--- Инициализируем переменную
+
+            if tool_name == "call_meme_bot":
+                query = arguments.get("query", "")
+                command_to_send = f"/meme {query}".strip()
+                await context.bot.send_message(chat_id=current_chat_id, text=command_to_send)
+                logger.info(f"Выполнена команда другого бота: {command_to_send}")
+
+            elif tool_name == "request_rating":
+                command_to_send = "/rating"
+                await context.bot.send_message(chat_id=current_chat_id, text=command_to_send)
+                logger.info(f"Выполнена команда другого бота: {command_to_send}")
+                
+            else:
+                await update.message.reply_text("Хм, я попытался сделать что-то, чего не умею. Странно.")
+                logger.warning(f"LLM сгенерировал неизвестный инструмент: {tool_name}")
+
+            # --- НОВЫЙ БЛОК: Добавляем вызванную команду в память бота ---
+            if command_to_send:
+                short_term_memory.add_message(
+                    role="model", 
+                    text=f"[Вызвал команду: {command_to_send}]", 
+                    user_name="Мишка"
+                )
+            # --- КОНЕЦ НОВОГО БЛОКА ---
+
+        else:
+            bot_response_text_escaped = escape_markdown(bot_response_raw)
+            logger.info(f"Ответ Gemini (сырой): '{bot_response_raw[:100]}...'")
 
             try:
-                # Отправляем ответ. Изначально была отправка с Markdown, но сейчас, согласно промпту,
-                # используется обычный текст или экранированный Markdown для безопасности.
                 await update.message.reply_text(bot_response_text_escaped, parse_mode=constants.ParseMode.MARKDOWN)
             except Exception as e:
                 logger.error(f"Ошибка при отправке экранированного Markdown ответа: {e}. Отправка как обычный текст.")
-                await update.message.reply_text(bot_response_text_raw)
+                await update.message.reply_text(bot_response_raw)
 
-            # Добавляем ответ бота в STM для поддержания контекста
-            short_term_memory.add_message(role="model", text=bot_response_text_raw, user_name="Мишка")
+            short_term_memory.add_message(role="model", text=bot_response_raw, user_name="Мишка")
             
-            # --- Запуск фоновых задач после ответа ---
-            
-            # 1. Проверяем, не пора ли извлечь факты
             if user_message_count_for_fact_extraction_trigger >= user_messages_threshold_for_fact_extraction_config:
                 logger.info(f"Достигнут порог ({user_message_count_for_fact_extraction_trigger}/{user_messages_threshold_for_fact_extraction_config}) для извлечения фактов.")
                 asyncio.create_task(trigger_fact_extraction( 
@@ -196,11 +248,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     gemini_analysis_client,
                     context 
                 ))
-                context.bot_data["user_message_count_for_fact_extraction_trigger"] = 0 # Сбрасываем счетчик
+                context.bot_data["user_message_count_for_fact_extraction_trigger"] = 0
             else:
                 logger.info(f"Порог для извлечения фактов не достигнут ({user_message_count_for_fact_extraction_trigger}/{user_messages_threshold_for_fact_extraction_config}).")
 
-            # 2. Запускаем эмоциональный анализ для текущего пользователя
             actual_user_name_for_analysis = current_users_data.get(user_id_str, {}).get("name", user.full_name)
             logger.info(f"Планирование задачи для эмоционального анализа пользователя {actual_user_name_for_analysis} (ID: {user_id_str})")
             asyncio.create_task(trigger_emotional_analysis(
@@ -213,19 +264,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 context=context 
             ))
             
-    elif should_process_stm_and_triggers: # Если это обычное сообщение в целевом чате и бот активен
-        logger.info(f"Сообщение от {user_name_for_log} не является прямым обращением. Только сохранено в STM для контекста.")
-        # STM уже пополнено выше. Текущая логика позволяет боту "слушать" весь чат.
-        # Задачи анализа (извлечение фактов и эмоций) запускаются только после прямого взаимодействия,
-        # но анализируют они всю накопленную историю, включая "пассивные" сообщения.
-        # Это позволяет боту быть в курсе событий в чате, даже когда он не участвует в диалоге.
-        
+    elif is_from_bot and should_process_stm_and_triggers:
+        logger.info(f"Сообщение от бота {user.full_name} сохранено в STM. Текст: '{user_message_text[:100]}...'")
+
     elif not should_process_stm_and_triggers and (is_direct_mention_match or is_reply_to_bot):
-        # Бот не активен или не в том чате, но было прямое обращение.
-        # Отвечаем коротким сообщением о статусе.
         if not is_bot_active:
              await update.message.reply_text("🐻 Zzz... (Я сейчас на паузе. Спроси позже или попроси администратора меня включить.)", parse_mode=constants.ParseMode.MARKDOWN)
              logger.info(f"Попытка обращения к неактивному боту от {user_name_for_log}.")
 
-    else: # Сообщение полностью игнорируется
+    else:
         logger.info(f"Сообщение от {user_name_for_log} проигнорировано (не обращение, бот неактивен или не в целевом чате).")

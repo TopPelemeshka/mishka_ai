@@ -113,11 +113,12 @@ async def scheduled_ltm_maintenance_job(application: Application):
         # Отправка отчета администратору, если были произведены какие-либо изменения
         if admin_user_id and (results.get("total_deleted", 0) > 0 or results.get("updated_importance", 0) > 0):
             report_text = (
-                f"⚙️ *Плановое обслуживание LTM завершено*\n\n"
-                f"- Удалено дубликатов/схожих: {results.get('deleted_duplicates', 0)}\n"
-                f"- Удалено устаревших/неважных: {results.get('deleted_obsolete', 0)}\n"
-                f"- *Всего уникальных фактов удалено:* {results.get('total_deleted', 0)}\n"
-                f"- *Обновлена важность у:* {results.get('updated_importance', 0)} фактов."
+                f"⚙️ *Плановое обслуживание LTM завершено (auto)*\n\n"
+                f"   *Отчет по оптимизации:*\n"
+                f"   - Устранено дубликатов/схожих: {results.get('deleted_duplicates', 0)}\n"
+                f"   - Удалено устаревших/неважных: {results.get('deleted_obsolete', 0)}\n"
+                f"   - *Всего записей удалено:* {results.get('total_deleted', 0)}\n"
+                f"   - *Пересчитана важность (decay):* {results.get('updated_importance', 0)} фактов."
             )
             await application.bot.send_message(chat_id=admin_user_id, text=report_text, parse_mode='Markdown')
         elif results.get("error"):
@@ -227,7 +228,7 @@ async def run_bot():
     # 4. Регистрация обработчиков (хендлеров)
     # Пользовательские команды
     application.add_handler(CommandHandler("start", start_command))
-    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("help_ai", help_command))
     application.add_handler(CommandHandler("chatid", chat_id_command))
     # Основной обработчик текстовых сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
