@@ -1,0 +1,39 @@
+# Виртуальное окружение
+/venv/
+/env/
+/.venv/
+
+# Файлы с переменными окружения
+.env
+.env.*
+!.env.example
+
+# Игнорируем локальную базу данных ChromaDB
+/mishka_ai/data/chroma_db_mishka_ltm/
+
+# Игнорируем файлы с реальными данными пользователей
+/mishka_ai/data/users.json
+/mishka_ai/data/emotional_memory.json
+/mishka_ai/data/prompts.json
+
+# Кэш Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Файлы IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Локальные базы данных SQLite (если будут использоваться)
+*.sqlite3
+*.db
+
+# Файлы операционной системы
+.DS_Store
+Thumbs.db
+
+.git
