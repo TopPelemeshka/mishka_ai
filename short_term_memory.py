@@ -47,6 +47,11 @@ class ShortTermMemory:
         elif exclude_last_n > 0 and len(history_list) < exclude_last_n: 
             return []
         return history_list
+    
+    def get_last_n(self, n: int) -> list:
+        """Возвращает последние N сообщений из истории."""
+        history_list = list(self.history)
+        return history_list[-n:]
 
     def clear(self):
         self.history.clear()

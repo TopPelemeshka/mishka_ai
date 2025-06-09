@@ -6,6 +6,7 @@ import logging
 import re
 import json 
 import asyncio 
+import time
 from telegram import Update, constants 
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown 
@@ -169,18 +170,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     is_reply_to_bot = update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id
 
     if not is_from_bot and (is_direct_mention_match or is_reply_to_bot) and should_process_stm_and_triggers:
+        
+        # ✅✅✅ НАЧАЛО НОВОГО БЛОКА ✅✅✅
+        last_response_time = context.bot_data.get("last_response_timestamp", 0.0)
+        cooldown = context.bot_data.get("response_cooldown_seconds", 3.0)
+        current_time = time.time()
+
+        if current_time - last_response_time < cooldown:
+            logger.warning(f"Отработал антифлуд. Прошло {current_time - last_response_time:.2f} сек. из {cooldown}. Сообщение от {user_name_for_log} проигнорировано.")
+            return # Прерываем выполнение
+        
+        context.bot_data["last_response_timestamp"] = current_time # Обновляем время ответа
+        # ✅✅✅ КОНЕЦ НОВОГО БЛОКА ✅✅✅
+        
         mention_type = "прямое упоминание" if is_direct_mention_match else "ответ боту"
         
         logger.info(f"Обнаружено {mention_type} Мишки от {user_name_for_log}. Текст: '{user_message_text}'.")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
 
         involved_user_ids = {user_id_str}
-        if update.message.reply_to_message and update.message.reply_to_message.from_user:
-            involved_user_ids.add(str(update.message.reply_to_message.from_user.id))
 
         bot_response_raw = await generate_mishka_response(
-            user_message_text=user_message_text, 
-            user_id_str=user_id_str,
+            user_message_text=user_message_text,
+            author_user_id=user_id_str, # Передаем ID текущего автора
+            author_user_name=user_name_for_log, # Передаем имя текущего автора
             current_users_data=current_users_data,
             mishka_system_prompt_template_str=mishka_system_prompt_template_str,
             short_term_memory=short_term_memory,

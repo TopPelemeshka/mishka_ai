@@ -196,10 +196,10 @@ class MemoryManager:
             meta = retrieved_metas[i]
             
             fact_display_text = meta.get("text_original", f"Текст для ID {fact_id} не найден")
-            logger.info(f"  Кандидат ID: {fact_id}, Дистанция: {distance:.4f}, Текст: {fact_display_text[:50]}...")
+            #logger.info(f"  Кандидат ID: {fact_id}, Дистанция: {distance:.4f}, Текст: {fact_display_text[:50]}...")
             
             if distance > max_distance:
-                logger.info(f"    -> Отброшен по дистанции ({distance:.4f} > {max_distance})")
+                #logger.info(f"    -> Отброшен по дистанции ({distance:.4f} > {max_distance})")
                 continue
 
             passes_user_filter = True
@@ -207,12 +207,12 @@ class MemoryManager:
                 stored_user_ids = json.loads(meta.get("user_ids_json", "[]"))
                 if stored_user_ids and not any(uid in stored_user_ids for uid in user_ids):
                     passes_user_filter = False
-                    logger.info(f"    -> Отброшен по фильтру пользователей")
+                    #logger.info(f"    -> Отброшен по фильтру пользователей")
 
             if passes_user_filter:
                 if len(final_facts_texts) < N:
                     final_facts_texts.append(fact_display_text)
-                    logger.info(f"    -> Добавлен в релевантные факты.")
+                    #logger.info(f"    -> Добавлен в релевантные факты.")
 
                 new_meta = meta.copy()
                 new_meta["last_accessed_timestamp"] = current_time_iso

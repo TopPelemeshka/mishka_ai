@@ -33,31 +33,22 @@ RETRYABLE_API_EXCEPTIONS = (
 def _filter_history_for_gemini(history: list[dict]) -> list[dict]:
     """
     Фильтрует историю сообщений, оставляя только поля, совместимые с Gemini API.
-
-    API Gemini ожидает, что каждый элемент истории будет словарем с ключами 'role' и 'parts'.
-    Эта функция удаляет любые кастомные поля (например, 'user_name', 'user_id'),
-    добавленные для внутренних нужд приложения.
-
-    Args:
-        history: Список словарей, представляющих историю диалога.
-
-    Returns:
-        Отфильтрованный список словарей, готовый для передачи в API.
+    На данном этапе основная задача - убедиться, что все сообщения имеют
+    правильную структуру {'role': ..., 'parts': ...}.
     """
     if not history:
         return []
     
     filtered_history = []
     for message in history:
-        filtered_message = {
-            "role": message.get("role"),
-            "parts": message.get("parts")
-        }
-        # Добавляем в историю только валидные сообщения
-        if filtered_message["role"] is not None and filtered_message["parts"] is not None:
-            filtered_history.append(filtered_message)
+        # Проверяем, что сообщение имеет нужные ключи и они не пустые
+        if isinstance(message, dict) and message.get("role") and message.get("parts"):
+            filtered_history.append({
+                "role": message["role"],
+                "parts": message["parts"]
+            })
         else:
-            logger.warning(f"Сообщение в истории пропущено из-за отсутствия 'role' или 'parts': {message}")
+            logger.warning(f"Сообщение в истории пропущено из-за некорректной структуры: {message}")
             
     return filtered_history
 

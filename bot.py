@@ -10,6 +10,8 @@
 - Корректный запуск и graceful shutdown бота.
 """
 import logging
+import logging.handlers # <--- ДОБАВИТЬ ЭТОТ ИМПОРТ
+import os
 import asyncio
 import json
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
@@ -67,20 +69,60 @@ try:
 except ImportError:
     pass
 
-# Настройка системы логирования
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-# Применение фильтра к логгеру asyncio
-asyncio_logger = logging.getLogger("asyncio")
-asyncio_logger.addFilter(GrpcBlockFilter())
-asyncio_logger.setLevel(logging.WARNING) 
-# Понижение уровня логирования для "шумных" библиотек
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("telegram.ext.Application").setLevel(logging.INFO) 
-logging.getLogger("telegram.bot").setLevel(logging.INFO) 
-logger = logging.getLogger(__name__)
+def setup_logging():
+    """Настраивает продвинутое логирование в консоль и в ротируемые файлы."""
+    log_formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    log_dir = "logs"
+    
+    # Создаем папку для логов, если ее нет
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
+    # 1. Основной обработчик для файла INFO
+    info_handler = logging.handlers.RotatingFileHandler(
+        filename=os.path.join(log_dir, "mishka_info.log"),
+        maxBytes=5 * 1024 * 1024,  # 5 MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    info_handler.setFormatter(log_formatter)
+    info_handler.setLevel(logging.INFO)
+
+    # 2. Обработчик для файла DEBUG (пишет все, включая инфо)
+    debug_handler = logging.handlers.RotatingFileHandler(
+        filename=os.path.join(log_dir, "mishka_debug.log"),
+        maxBytes=5 * 1024 * 1024,  # 5 MB
+        backupCount=5,
+        encoding='utf-8'
+    )
+    debug_handler.setFormatter(log_formatter)
+    debug_handler.setLevel(logging.DEBUG)
+
+    # 3. Обработчик для вывода в консоль (как раньше)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    console_handler.setLevel(logging.INFO)
+
+    # Получаем корневой логгер и настраиваем его
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)  # Устанавливаем самый низкий уровень на корень
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(info_handler)
+    root_logger.addHandler(debug_handler)
+
+    # Применение фильтра к логгеру asyncio
+    asyncio_logger = logging.getLogger("asyncio")
+    asyncio_logger.addFilter(GrpcBlockFilter())
+    asyncio_logger.setLevel(logging.WARNING)
+
+    # Понижение уровня логирования для "шумных" библиотек
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("telegram.ext.Application").setLevel(logging.INFO)
+    logging.getLogger("telegram.bot").setLevel(logging.INFO)
+
+# Вызываем нашу новую функцию для настройки логирования
+setup_logging()
+logger = logging.getLogger(__name__)
 
 async def scheduled_ltm_maintenance_job(application: Application):
     """
@@ -212,6 +254,10 @@ async def run_bot():
     application.bot_data["all_prompts"] = all_prompts_data
     # Счетчик сообщений для отложенного запуска извлечения фактов
     application.bot_data["user_message_count_for_fact_extraction_trigger"] = 0
+    application.bot_data["last_response_timestamp"] = 0.0 # Время последнего ответа
+    application.bot_data["response_cooldown_seconds"] = 3.0 # Кулдаун в секундах
+
+    application.bot_data["emotional_analysis_msg_counters"] = {}
 
     # Перенос порогов и настроек из .env в bot_data для легкого доступа
     application.bot_data["USER_MESSAGES_THRESHOLD_FOR_FACT_EXTRACTION_CONFIG"] = app_config["user_messages_threshold_for_fact_extraction"]

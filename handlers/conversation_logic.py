@@ -14,7 +14,7 @@ from textwrap import dedent
 from mishka_ai.utils import get_user_details_string
 
 # Используется для аннотации типов, чтобы избежать циклических импортов
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Dict
 from telegram.ext import ContextTypes
 
 if TYPE_CHECKING:
@@ -24,9 +24,41 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+def format_history_for_llm(history: List[Dict]) -> List[Dict]:
+    """
+    Форматирует историю сообщений для LLM, вставляя имя автора в текст.
+
+    Преобразует:
+    [{"role": "user", "parts": ["привет"], "user_name": "Игорь"}]
+    В:
+    [{"role": "user", "parts": ["Игорь: привет"]}]
+
+    Это решает проблему путаницы пользователей, так как LLM теперь явно видит, кто что сказал.
+    """
+    formatted_history = []
+    for message in history:
+        role = message.get("role")
+        original_text = message.get("parts", [""])[0]
+        
+        # Пропускаем пустые сообщения
+        if not original_text.strip():
+            continue
+
+        final_text = original_text
+        if role == "user":
+            user_name = message.get("user_name", "Неизвестный")
+            final_text = f"{user_name}: {original_text}"
+        elif role == "model":
+            # Ответы самого бота тоже можно пометить для ясности
+            final_text = f"Мишка: {original_text}"
+
+        formatted_history.append({"role": role, "parts": [final_text]})
+    return formatted_history
+
 async def generate_mishka_response(
     user_message_text: str,
-    user_id_str: str,
+    author_user_id: str,
+    author_user_name: str,
     current_users_data: dict,
     mishka_system_prompt_template_str: str,
     short_term_memory: 'ShortTermMemory',
@@ -42,21 +74,7 @@ async def generate_mishka_response(
     1. Системный промпт с описанием личности бота и известных пользователей.
     2. Релевантные факты из долгосрочной памяти (LTM).
     3. Эмоциональный контекст об авторе сообщения.
-    4. Историю последних сообщений из краткосрочной памяти (STM).
-
-    Args:
-        user_message_text: Текст сообщения от пользователя.
-        user_id_str: ID пользователя, отправившего сообщение.
-        current_users_data: Словарь с данными всех известных пользователей.
-        mishka_system_prompt_template_str: Шаблон системного промпта.
-        short_term_memory: Экземпляр STM.
-        memory_manager: Экземпляр MemoryManager для доступа к LTM и эмо-памяти.
-        gemini_client: Клиент для генерации ответа.
-        involved_user_ids: Множество ID пользователей, задействованных в сообщении.
-        context: Контекст бота для доступа к конфигурации.
-
-    Returns:
-        Сгенерированный текстовый ответ или None в случае ошибки.
+    4. Историю последних сообщений из краткосрочной памяти (STM), отформатированную с именами авторов.
     """
     user_details_str = get_user_details_string(current_users_data)
     max_relevant_distance = context.bot_data.get("LTM_MAX_RELEVANT_DISTANCE_CONFIG", 1.0)
@@ -74,89 +92,84 @@ async def generate_mishka_response(
         logger.info("conversation_logic: Релевантных фактов для текущего запроса не найдено.")
 
     # 2. Формируем базовый системный промпт
-    mishka_system_prompt_base = ""
     if not mishka_system_prompt_template_str:
         logger.error("Шаблон системного промпта Мишки пуст!")
         mishka_system_prompt_base = "Ты Мишка, дружелюбный и немного саркастичный медведь."
     else:
-        try:
-            mishka_system_prompt_base = mishka_system_prompt_template_str.format(user_details=user_details_str)
-        except KeyError as e:
-            # Обработка ошибки, если в шаблоне промпта неверный плейсхолдер
-            logger.error(f"Ошибка форматирования промпта: {e}. Промпт: '{mishka_system_prompt_template_str}', Детали: '{user_details_str}'")
-            mishka_system_prompt_base = mishka_system_prompt_template_str 
-        except Exception as e:
-            logger.error(f"Непредвиденная ошибка при форматировании промпта: {e}")
-            mishka_system_prompt_base = "Ты Мишка, дружелюбный и немного саркастичный медведь."
+        # ИСПОЛЬЗУЕМ .replace() ВМЕСТО .format() для безопасной вставки user_details,
+        # чтобы избежать конфликтов с фигурными скобками в примерах JSON в промпте.
+        mishka_system_prompt_base = mishka_system_prompt_template_str.replace('{user_details}', user_details_str)
     
     final_system_prompt = mishka_system_prompt_base
-    # Добавляем факты из LTM в системный промпт, если они есть
     if relevant_facts:
-        facts_str = "\n".join([f"- {fact}" for fact in relevant_facts])
-        final_system_prompt += f"\n\n[ВАЖНАЯ ИНФОРМАЦИЯ ИЗ ПАМЯТИ ДЛЯ ТЕКУЩЕГО РАЗГОВОРА - используй ее при ответе]:\n{facts_str}"
+        facts_str = "\\n".join([f"- {fact}" for fact in relevant_facts])
+        final_system_prompt += f"\\n\\n[ВАЖНАЯ ИНФОРМАЦИЯ ИЗ ПАМЯТИ - используй ее при ответе]:\\n{facts_str}"
 
     # 3. Получаем и добавляем эмоциональный контекст
-    user_name_for_prompt = current_users_data.get(user_id_str, {}).get("name", f"Пользователь_{user_id_str}")
-    emotional_data_for_user = memory_manager.get_emotional_notes(user_id_str)
-    emotional_context_str_parts = []
+    emotional_data_for_user = memory_manager.get_emotional_notes(author_user_id)
     if emotional_data_for_user:
-        logger.debug(f"Получены эмоциональные данные для user {user_name_for_prompt} (ID: {user_id_str}): {emotional_data_for_user}")
-        
+        emotional_context_parts = []
         notes = emotional_data_for_user.get('notes', [])
-        if notes and isinstance(notes, list):
-            notes_str = "; ".join(notes) 
-            if notes_str:
-                emotional_context_str_parts.append(f"Недавние/ключевые эмоциональные заметки о нем/ней: {notes_str}.")
+        if notes:
+            emotional_context_parts.append(f"Недавние/ключевые заметки о нем/ней: {'; '.join(notes)}.")
         last_summary = emotional_data_for_user.get('last_interaction_summary', '')
         if last_summary:
-            emotional_context_str_parts.append(f"Общее впечатление от предыдущего общения с ним/ней: {last_summary}.")
-            
-    if emotional_context_str_parts:
-        emotional_context_str = " ".join(emotional_context_str_parts)
-        final_system_prompt += (
-            f"\n\n[ЭМОЦИОНАЛЬНЫЙ КОНТЕКСТ О {user_name_for_prompt} (ID: {user_id_str}) - "
-            f"учти это в своем тоне и ответе]:\n{emotional_context_str}"
-        )
-        logger.info(f"Добавлен эмоциональный контекст для {user_name_for_prompt} в системный промпт.")
-    else:
-        logger.info(f"Эмоциональный контекст для {user_name_for_prompt} не найден или пуст.")
-    
+            emotional_context_parts.append(f"Общее впечатление: {last_summary}.")
+        
+        if emotional_context_parts:
+            emotional_context_str = " ".join(emotional_context_parts)
+            final_system_prompt += (
+                f"\\n\\n[ЭМОЦИОНАЛЬНЫЙ КОНТЕКСТ О {author_user_name} (ID: {author_user_id}) - учти это в тоне]:\\n{emotional_context_str}"
+            )
+            logger.info(f"Добавлен эмоциональный контекст для {author_user_name}.")
+
     logger.info(f"conversation_logic: Финальный системный промпт (начало): '{final_system_prompt[:450]}...'")
 
-    # 4. Формируем историю для API-вызова
-    history_for_gemini_call = [
-        {"role": "user", "parts": [final_system_prompt]},
-        {"role": "model", "parts": ["Понял задачу. Я Мишка, готов общаться. Инструменты использую только по прямому указанию."]},
-        # --- НОВЫЙ БЛОК: Добавляем "внушенный" пример ---
-        {"role": "user", "parts": ["Миш, как дела?"], "user_name": "Георгий", "user_id": "714790147"},
-        {"role": "model", "parts": ["Да все по-старому, берлогу свою виртуальную обустраиваю. Сам как?"]},
-        {"role": "user", "parts": ["Миша, покажи рейтинг"], "user_name": "Георгий", "user_id": "714790147"},
-        {"role": "model", "parts": ["```json\n{\"tool_name\": \"request_rating\", \"arguments\": {}}\n```"]}
-        # --- КОНЕЦ НОВОГО БЛОКА ---
-    ]
-    # Добавляем историю из STM (кроме последнего сообщения пользователя, которое пойдет как основной промпт)
-    processed_short_term_history = short_term_memory.get_formatted_history(exclude_last_n=1) 
-    history_for_gemini_call.extend(processed_short_term_history)
-
-    prompt_text_to_gemini = user_message_text
-    current_user_name_from_data = current_users_data.get(user_id_str, {}).get("name")
-    normalized_message = user_message_text.lower()
-
-    # Особая логика для вопросов о себе, чтобы помочь модели понять контекст
-    is_self_query = (
-        "кто я" in normalized_message or
-        "как меня зовут" in normalized_message or
-        "ты знаешь меня" in normalized_message or
-        "помнишь меня" in normalized_message
-    )
-    if current_user_name_from_data and is_self_query:
-        prompt_text_to_gemini = f"[Мишка, учти, что это спрашивает {current_user_name_from_data} (ID: {user_id_str}) о себе.] {user_message_text}"
+    # 4. Формируем историю для API-вызова с помощью новой функции
+    # Берем последние сообщения из STM. Это значение можно настраивать.
+    short_context_window = 12 
+    stm_history = short_term_memory.get_last_n(n=short_context_window)
     
-    # 5. Вызываем LLM для генерации ответа
+    # Форматируем историю, чтобы модель видела, КТО что сказал
+    history_for_gemini_call = format_history_for_llm(stm_history)
+    
+    # Удаляем из отформатированной истории последнее сообщение, т.к. оно является текущим запросом
+    if history_for_gemini_call:
+         # Сравниваем текст, чтобы убедиться, что удаляем именно текущее сообщение
+        last_formatted_msg_text = history_for_gemini_call[-1].get("parts", [""])[0]
+        if user_message_text in last_formatted_msg_text:
+            history_for_gemini_call.pop()
+
+    # Создаем основной промпт пользователя, также добавляя его имя для единообразия
+    prompt_text_to_gemini = f"{author_user_name}: {user_message_text}"
+
+    # 5. Собираем финальный payload для Gemini
+    # Мы передадим системный промпт как первое сообщение в истории.
+    final_history_payload = [
+        {"role": "user", "parts": [final_system_prompt]},
+        {"role": "model", "parts": ["Мишка: Понял задачу. Я Мишка, готов общаться. Контекст диалога, факты и эмоции учту. Markdown не использую."]}
+    ]
+    final_history_payload.extend(history_for_gemini_call)
+
+    # Логирование полного промпта для отладки
+    full_prompt_for_log = ""
+    for part in final_history_payload:
+        role = part.get("role", "unknown")
+        text = "".join(p for p in part.get("parts", []) if isinstance(p, str))
+        full_prompt_for_log += f"----- ROLE: {role} -----\\n{text}\\n\\n"
+    full_prompt_for_log += f"----- CURRENT USER PROMPT -----\\n{prompt_text_to_gemini}"
+    logger.debug(f"===== ПОЛНЫЙ КОНТЕКСТ ДЛЯ GEMINI =====\\n{full_prompt_for_log}\\n=========================================")
+
+    # 6. Вызываем LLM для генерации ответа
     bot_response_text = await gemini_client.generate_response(
         prompt_text=prompt_text_to_gemini,
-        history=history_for_gemini_call 
+        history=final_history_payload
     )
+    
+    # Ответ модели может содержать ее "имя" ("Мишка: ..."). Его нужно убрать.
+    if bot_response_text and bot_response_text.lower().startswith("мишка:"):
+        bot_response_text = bot_response_text[len("мишка:"):].strip()
+
     return bot_response_text
 
 
@@ -231,7 +244,7 @@ async def trigger_emotional_consolidation(
 
     # Подготовка данных для промпта
     current_overall_summary = user_emotional_data.get("last_interaction_summary", "Пока нет общего впечатления.")
-    notes_to_consolidate_text = "\n".join([f"{i+1}. {note}" for i, note in enumerate(current_notes_list)]).strip()
+    notes_to_consolidate_text = "\\n".join([f"{i+1}. {note}" for i, note in enumerate(current_notes_list)]).strip()
 
     consolidation_prompt_template = all_prompts_data.get("emotional_consolidation_prompt")
     if not consolidation_prompt_template:
@@ -330,7 +343,8 @@ async def trigger_emotional_analysis(
     emotional_notes_consolidation_trigger_count = context.bot_data.get("EMOTIONAL_NOTES_CONSOLIDATION_TRIGGER_COUNT_CONFIG", 7)
     
     # Используем user_data для хранения счетчиков сообщений для каждого пользователя отдельно
-    user_specific_analysis_trigger_counters = context.user_data.setdefault('emotional_analysis_msg_counters', {})
+    user_specific_analysis_trigger_counters = context.bot_data.setdefault('emotional_analysis_msg_counters', {})
+
     current_msg_count_for_analysis = user_specific_analysis_trigger_counters.get(user_id_str, 0) + 1
     user_specific_analysis_trigger_counters[user_id_str] = current_msg_count_for_analysis
 
@@ -359,7 +373,7 @@ async def trigger_emotional_analysis(
     interaction_history_parts = [
         f"{msg.get('user_name', 'Мишка')}: {msg.get('parts', [''])[0]}" for msg in interaction_history_messages
     ]
-    interaction_history_str = "\n".join(interaction_history_parts)
+    interaction_history_str = "\\n".join(interaction_history_parts)
     
     if not interaction_history_str.strip():
         logger.warning(f"Сформированная история для эмоц. анализа пуста для user {user_name}. Анализ отменен.")
@@ -405,22 +419,20 @@ async def trigger_emotional_analysis(
         logger.error(f"Непредвиденная ошибка при парсинге JSON (эмоц. анализ) user {user_name}: {e_parse}. Ответ: {response_str[:500]}", exc_info=True)
         return
 
-    if not isinstance(parsed_json_data, dict):
-        logger.warning(f"Распарсенные данные для эмоц. анализа не являются словарем или пусты. User: {user_name}. Данные: {parsed_json_data}")
-        return
+    # В старом коде был ключ "new_emotional_note", в промпте "new_observation_for_dossier"
+    # Для совместимости ищем оба.
+    new_emotional_note = parsed_json_data.get("new_observation_for_dossier", "").strip()
+    if not new_emotional_note:
+        new_emotional_note = parsed_json_data.get("new_emotional_note", "").strip()
 
-    new_emotional_note = parsed_json_data.get("new_emotional_note", "").strip()
-    relationship_change_summary = parsed_json_data.get("relationship_change", "").strip()
-    
-    # Обновление эмоциональной памяти, если LLM вернул что-то значимое
-    raw_notes_count_after_update = 0 
-    if new_emotional_note or relationship_change_summary: 
-        logger.info(f"Результаты эмоц. анализа для user {user_name}: Новая заметка: '{new_emotional_note}', Изменение отношений: '{relationship_change_summary}'.")
+    raw_notes_count_after_update = 0
+    if new_emotional_note:
+        logger.info(f"Результат эмоц. анализа для user {user_name}: Новая заметка: '{new_emotional_note}'.")
         raw_notes_count_after_update = memory_manager.update_emotional_notes(
             user_id=user_id_str,
-            new_note_text=new_emotional_note if new_emotional_note else None, 
-            interaction_summary=relationship_change_summary if relationship_change_summary else None,
-            user_name=user_name 
+            new_note_text=new_emotional_note,
+            interaction_summary=None, # Это поле больше не используется напрямую
+            user_name=user_name
         )
         logger.info(f"Эмоциональная память для user {user_name} обновлена. Текущее кол-во сырых заметок: {raw_notes_count_after_update}.")
     else:

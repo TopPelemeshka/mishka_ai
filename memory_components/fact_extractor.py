@@ -96,6 +96,10 @@ class FactExtractor:
 
         # 3. Вызываем LLM для анализа.
         logger.info(f"FactExtractor: Запрос к Gemini (модель: {gemini_client.model_name}) для извлечения фактов...")
+
+        # ✅✅✅ ДОБАВЬТЕ ЭТУ СТРОКУ ✅✅✅
+        logger.debug(f"===== ПОЛНЫЙ ПРОМПТ ДЛЯ GEMINI (EXTRACT_FACTS) =====\n{prompt_for_gemini}\n=====================================================")
+
         extracted_data_str = await gemini_client.generate_response(prompt_text=prompt_for_gemini, history=None)
         logger.info(f"FactExtractor: Ответ от Gemini (сырой, до 500 симв.): '{str(extracted_data_str)[:500]}'")
 
