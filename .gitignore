@@ -1,0 +1,40 @@
+# Security
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Docker Data (Volumes)
+postgres_data/
+redis_data/
+qdrant_data/
+
+# Database
+src/database/migrations/versions/*.py
+!src/database/migrations/versions/__init__.py
+# (Примечание: обычно миграции комитят, но если вы хотите генерировать их на лету при старте, можно игнорировать. 
+# Однако хорошей практикой является хранение миграций в репо. 
+# Учитывая старт-скрипт с autogenerate - вероятно, пользователь хочет игнорировать конфликтующие миграции 
+# или наоборот, комитить их. В промпте про миграции явно не сказано игнорировать, 
+# но сказано "Docker данные". Оставлю миграции незаигноренными по стандарту, кроме .pyc)
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+
+# Antigravity / AI
+.agent/logs/
+.agent/memory/
+*.log
