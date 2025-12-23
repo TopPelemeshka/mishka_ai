@@ -5,7 +5,7 @@ class PersonalityManager:
     """Менеджер для формирования системных промптов и управления личностью."""
 
     @staticmethod
-    def get_system_prompt(user: User) -> str:
+    def get_system_prompt(user: User, facts: str = "") -> str:
         """Формирует системный промпт для конкретного пользователя."""
         
         # Базовая личность
@@ -23,6 +23,16 @@ class PersonalityManager:
             f"ID: {user.id}\n"
         )
         
+        # Долгосрочная память (факты)
+        memory_section = ""
+        if facts:
+            memory_section = (
+                f"\n<LONG_TERM_MEMORY>\n"
+                f"{facts}\n"
+                f"</LONG_TERM_MEMORY>\n"
+                f"Используй эту информацию, если она полезна для ответа. Если нет — игнорируй."
+            )
+        
         # Инструкции по стилю
         style_instructions = (
             "\nИнструкции:\n"
@@ -32,7 +42,7 @@ class PersonalityManager:
             "4. Если пользователь спрашивает глупость — ответь остроумно."
         )
 
-        return base_personality + user_context + style_instructions
+        return base_personality + user_context + memory_section + style_instructions
 
 # Глобальный экземпляр
 personality_manager = PersonalityManager()

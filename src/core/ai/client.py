@@ -51,5 +51,38 @@ class AIClient:
             # Логирование ошибки лучше делать выше или тут
             return f"⚠️ Произошла ошибка при обращении к AI: {str(e)}"
 
+    async def get_embedding(self, text: str, task_type: str = "RETRIEVAL_DOCUMENT") -> List[float]:
+        """
+        Генерирует эмбеддинг для текста с нормализацией (L2).
+        Использует модель text-embedding-004 через LangChain (для поддержки прокси).
+        """
+        import numpy as np
+        from langchain_google_genai import GoogleGenerativeAIEmbeddings
+        
+        try:
+            # Используем LangChain враппер, так как он корректно работает с прокси через httpx
+            # который подхватывает HTTP_PROXY из переменных окружения.
+            embeddings_model = GoogleGenerativeAIEmbeddings(
+                model="models/text-embedding-004",
+                google_api_key=settings.GOOGLE_API_KEY,
+                task_type=task_type.lower() if task_type else "retrieval_document",
+            )
+            
+            # Получаем эмбеддинг
+            # LangChain embed_query уже возвращает список флоатов
+            embedding = await embeddings_model.aembed_query(text)
+            
+            # L2 Нормализация (на всякий случай, хотя text-embedding-004 может быть уже нормализован, но L2 не повредит)
+            norm = np.linalg.norm(embedding)
+            if norm > 0:
+                embedding = (np.array(embedding) / norm).tolist()
+                
+            return embedding
+        except Exception as e:
+            # Логируем ошибку
+            import logging
+            logging.getLogger(__name__).error(f"Embedding error: {e}")
+            return []
+
 # Глобальный экземпляр
 ai_client = AIClient()

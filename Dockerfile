@@ -3,6 +3,7 @@ FROM python:3.11-slim
 # Установка переменных окружения для предотвращения создания .pyc файлов и буферизации вывода
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Установка рабочей директории
 WORKDIR /app

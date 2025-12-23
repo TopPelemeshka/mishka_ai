@@ -9,8 +9,8 @@ from src.bot.loader import redis_conn
 class ShortTermMemory:
     """Краткосрочная память пользователя на базе Redis List."""
 
-    def __init__(self, ttl: int = 86400): # 24 часа TTL
-        self.redis = redis_conn
+    def __init__(self, redis_client=None, ttl: int = 86400): # 24 часа TTL
+        self.redis = redis_client or redis_conn
         self.ttl = ttl
 
     def _get_key(self, user_id: int) -> str:
