@@ -1,11 +1,21 @@
 [project]
 name = "mishka-brain"
 version = "0.1.0"
-description = "Core decision making service for Mishka AI"
+description = "Orchestrator service for Mishka AI"
 requires-python = ">=3.11"
 dependencies = [
     "langgraph",
-    "fastapi",
-    "uvicorn",
-    "pydantic"
+    "langchain-core",
+    "aio-pika",
+    "httpx",
+    "python-dotenv",
+    "loguru"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-mock"
 ]

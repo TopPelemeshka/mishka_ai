@@ -6,9 +6,8 @@ ENV PYTHONUNBUFFERED=1
 
 COPY pyproject.toml .
 
-# For now just install basics, will use poetry or pip later
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[dev]"
 
 COPY . .
 
-CMD ["python", "-m", "mishka_brain"]
+CMD ["python", "src/main.py"]

@@ -7,9 +7,12 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-brain:/app
-    command: python -c "import time; print('Mishka Brain started'); time.sleep(3600)"
+    environment:
+      - LLM_PROVIDER_URL=${LLM_PROVIDER_URL:-http://mishka-llm-provider:8000/v1/chat/completions}
+    command: python src/main.py
     depends_on:
       - rabbitmq
+      - mishka-llm-provider
       - mishka-memory
 
   mishka-bot-gateway:
