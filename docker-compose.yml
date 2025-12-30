@@ -32,7 +32,9 @@ services:
     environment:
       - HTTP_PROXY=${LLM_PROXY}
       - HTTPS_PROXY=${LLM_PROXY}
-    command: python -c "import time; print('LLM Provider started'); time.sleep(3600)"
+    ports:
+      - "8000:8000"
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
 
   mishka-memory:
     build: ./services/mishka-memory
@@ -71,12 +73,16 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-mishka_db}
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
 
   qdrant:
     image: qdrant/qdrant:latest
     container_name: mishka_qdrant
     ports:
       - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
@@ -84,3 +90,7 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+
+volumes:
+  postgres_data:
+  qdrant_data:

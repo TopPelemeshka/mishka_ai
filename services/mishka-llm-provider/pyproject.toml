@@ -6,6 +6,8 @@ requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "uvicorn",
-    "openai",
+    "google-generativeai",
+    "python-dotenv",
+    "requests",
     "httpx"
 ]
