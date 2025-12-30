@@ -6,8 +6,8 @@ ENV PYTHONUNBUFFERED=1
 
 COPY pyproject.toml .
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[dev]"
 
 COPY . .
 
-CMD ["python", "-m", "mishka_bot_gateway"]
+CMD ["python", "src/main.py"]

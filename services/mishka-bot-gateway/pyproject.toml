@@ -5,6 +5,16 @@ description = "Telegram Gateway for Mishka AI"
 requires-python = ">=3.11"
 dependencies = [
     "aiogram>=3.0.0",
-    "fastapi",
-    "uvicorn"
+    "aio-pika",
+    "python-dotenv",
+    "uvicorn",
+    "fastapi" 
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-mock"
 ]
