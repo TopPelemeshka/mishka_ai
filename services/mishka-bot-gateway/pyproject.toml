@@ -1,0 +1,10 @@
+[project]
+name = "mishka-bot-gateway"
+version = "0.1.0"
+description = "Telegram Gateway for Mishka AI"
+requires-python = ">=3.11"
+dependencies = [
+    "aiogram>=3.0.0",
+    "fastapi",
+    "uvicorn"
+]

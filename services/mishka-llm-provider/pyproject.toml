@@ -1,0 +1,11 @@
+[project]
+name = "mishka-llm-provider"
+version = "0.1.0"
+description = "LLM Provider service for Mishka AI"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "openai",
+    "httpx"
+]

@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  mishka-brain:
+    build: ./services/mishka-brain
+    container_name: mishka-brain
+    env_file: .env
+    volumes:
+      - ./services/mishka-brain:/app
+    command: python -c "import time; print('Mishka Brain started'); time.sleep(3600)"
+    depends_on:
+      - rabbitmq
+      - mishka-memory
+
+  mishka-bot-gateway:
+    build: ./services/mishka-bot-gateway
+    container_name: mishka-bot-gateway
+    env_file: .env
+    volumes:
+      - ./services/mishka-bot-gateway:/app
+    command: python -c "import time; print('Bot Gateway started'); time.sleep(3600)"
+    depends_on:
+      - rabbitmq
+      - mishka-brain
+
+  mishka-llm-provider:
+    build: ./services/mishka-llm-provider
+    container_name: mishka-llm-provider
+    env_file: .env
+    volumes:
+      - ./services/mishka-llm-provider:/app
+    environment:
+      - HTTP_PROXY=${LLM_PROXY}
+      - HTTPS_PROXY=${LLM_PROXY}
+    command: python -c "import time; print('LLM Provider started'); time.sleep(3600)"
+
+  mishka-memory:
+    build: ./services/mishka-memory
+    container_name: mishka-memory
+    env_file: .env
+    volumes:
+      - ./services/mishka-memory:/app
+    command: python -c "import time; print('Memory service started'); time.sleep(3600)"
+    depends_on:
+      - postgres
+      - qdrant
+
+  # Tools
+  tool-browser:
+    build: ./tools/browser
+    container_name: tool-browser
+    command: python -c "import time; print('Browser tool started'); time.sleep(3600)"
+
+  tool-media:
+    build: ./tools/media
+    container_name: tool-media
+    command: python -c "import time; print('Media tool started'); time.sleep(3600)"
+
+  tool-search:
+    build: ./tools/search
+    container_name: tool-search
+    command: python -c "import time; print('Search tool started'); time.sleep(3600)"
+
+  # Infra
+  postgres:
+    image: postgres:15-alpine
+    container_name: mishka_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mishka}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      POSTGRES_DB: ${POSTGRES_DB:-mishka_db}
+    ports:
+      - "5432:5432"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: mishka_qdrant
+    ports:
+      - "6333:6333"
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: mishka_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"

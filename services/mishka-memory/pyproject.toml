@@ -1,0 +1,12 @@
+[project]
+name = "mishka-memory"
+version = "0.1.0"
+description = "Memory Service for Mishka AI"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "asyncpg",
+    "qdrant-client"
+]

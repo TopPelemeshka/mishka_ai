@@ -1,0 +1,10 @@
+[project]
+name = "tool-media"
+version = "0.1.0"
+description = "Media tool for Mishka AI"
+requires-python = ">=3.11"
+dependencies = [
+    "pillow",
+    "fastapi",
+    "uvicorn"
+]
