@@ -73,6 +73,8 @@ async def chat_completions(request: ChatCompletionRequest):
             ]
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error calling Gemini: {e}")
         raise HTTPException(status_code=500, detail=str(e))

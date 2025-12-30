@@ -11,3 +11,6 @@ build:
 
 logs:
 	docker-compose logs -f
+
+test-llm:
+	docker-compose run --rm mishka-llm-provider pytest tests/ -v --cov=src

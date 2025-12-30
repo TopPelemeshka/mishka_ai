@@ -6,7 +6,7 @@ ENV PYTHONUNBUFFERED=1
 
 COPY pyproject.toml .
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ".[dev]"
 
 COPY . .
 
