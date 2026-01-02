@@ -25,7 +25,7 @@ async def agent_node(state: AgentState):
              formatted_messages.append({"role": "model", "content": msg.content}) # Gemini uses 'model' role often, or 'assistant'
 
     payload = {
-        "model": "gemini-pro", # This might need config
+        "model": os.getenv("LLM_MODEL", "gemini-pro"),
         "messages": formatted_messages
     }
     
@@ -33,7 +33,14 @@ async def agent_node(state: AgentState):
     
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.post(LLM_PROVIDER_URL, json=payload, timeout=30.0)
+            api_key = os.getenv("GEMINI_API_KEY")
+            headers = {}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            else:
+                logger.warning("GEMINI_API_KEY not found in environment variables")
+                
+            response = await client.post(LLM_PROVIDER_URL, json=payload, headers=headers, timeout=30.0)
             response.raise_for_status()
             data = response.json()
             
@@ -44,9 +51,12 @@ async def agent_node(state: AgentState):
             
             return {"messages": [AIMessage(content=content)]}
             
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM Provider HTTP status error: {e.response.status_code} - {e.response.text}")
+            return {"messages": [AIMessage(content=f"Ошибка LLM Provider: {e.response.status_code}")]}
         except Exception as e:
-            logger.error(f"LLM Provider call failed: {e}")
-            return {"messages": [AIMessage(content="Ой, что-то в голове помутилось... (Ошибка LLM)")]}
+            logger.exception(f"LLM Provider unexpected error: {e}")
+            return {"messages": [AIMessage(content="Ой, что-то в голове помутилось... (Ошибка Brain)")]}
 
 # Build Graph
 builder = StateGraph(AgentState)

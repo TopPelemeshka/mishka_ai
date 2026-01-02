@@ -10,6 +10,8 @@ RUN pip install --no-cache-dir ".[dev]"
 
 COPY . .
 
+ENV PYTHONPATH=/app
+
 # Check config by printing it (optional debug)
 RUN python -c "from src.config import get_proxy_url; print(f'Build time proxy check: {get_proxy_url()}')"
 

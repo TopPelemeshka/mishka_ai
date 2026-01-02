@@ -21,7 +21,8 @@ async def main():
     await rmq.consume("bot_outbox", send_message_to_user)
     
     # Start polling
-    logger.info("Starting polling...")
+    bot_info = await bot.get_me()
+    logger.info(f"Starting polling for bot: @{bot_info.username}")
     try:
         await dp.start_polling(bot)
     finally:

@@ -10,4 +10,6 @@ RUN pip install --no-cache-dir ".[dev]"
 
 COPY . .
 
+ENV PYTHONPATH=/app
+
 CMD ["python", "src/main.py"]

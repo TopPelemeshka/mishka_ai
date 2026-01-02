@@ -23,6 +23,8 @@ async def command_start_handler(message: Message):
 
 @dp.message()
 async def message_handler(message: Message):
+    logger.info(f"Received message from {message.from_user.id}: {message.text}")
+
     if not message.text:
         return
 
@@ -36,10 +38,9 @@ async def message_handler(message: Message):
         "type": "text_message"
     }
     
-    logger.info(f"Received message: {event}")
-    
     # Publish to RabbitMQ
     try:
+        logger.info(f"Sending to RabbitMQ: {event}")
         await rmq.publish("chat_events", event)
     except Exception as e:
         logger.error(f"Failed to publish message: {e}")
@@ -50,6 +51,7 @@ async def send_message_to_user(data: dict):
     """
     Callback for processing messages from bot_outbox queue.
     """
+    logger.info(f"Received response from Brain: {data}")
     chat_id = data.get("chat_id")
     text = data.get("text")
     

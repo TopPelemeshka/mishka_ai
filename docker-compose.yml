@@ -9,6 +9,8 @@ services:
       - ./services/mishka-brain:/app
     environment:
       - LLM_PROVIDER_URL=${LLM_PROVIDER_URL:-http://mishka-llm-provider:8000/v1/chat/completions}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LLM_MODEL=${LLM_MODEL:-gemini-pro}
     command: python src/main.py
     depends_on:
       - rabbitmq
@@ -21,7 +23,7 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-bot-gateway:/app
-    command: python -c "import time; print('Bot Gateway started'); time.sleep(3600)"
+    command: python src/main.py
     depends_on:
       - rabbitmq
       - mishka-brain
