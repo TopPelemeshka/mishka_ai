@@ -13,9 +13,12 @@ services:
       - LLM_MODEL=${LLM_MODEL:-gemini-pro}
     command: python src/main.py
     depends_on:
-      - rabbitmq
-      - mishka-llm-provider
-      - mishka-memory
+      rabbitmq:
+        condition: service_healthy
+      mishka-llm-provider:
+        condition: service_started
+      mishka-memory:
+        condition: service_started
 
   mishka-bot-gateway:
     build: ./services/mishka-bot-gateway
@@ -23,10 +26,14 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-bot-gateway:/app
+    environment:
+      - ALLOWED_GROUP_ID=${ALLOWED_GROUP_ID:-}
     command: python src/main.py
     depends_on:
-      - rabbitmq
-      - mishka-brain
+      rabbitmq:
+        condition: service_healthy
+      mishka-brain:
+        condition: service_started
 
   mishka-llm-provider:
     build: ./services/mishka-llm-provider
@@ -97,6 +104,11 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

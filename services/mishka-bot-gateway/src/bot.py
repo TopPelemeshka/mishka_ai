@@ -17,13 +17,48 @@ if not TOKEN:
 bot = Bot(token=TOKEN) if TOKEN else None
 dp = Dispatcher()
 
+# Security: Allowed Group ID
+ALLOWED_GROUP_ID = os.getenv("ALLOWED_GROUP_ID")
+if ALLOWED_GROUP_ID:
+    try:
+        ALLOWED_GROUP_ID = int(ALLOWED_GROUP_ID)
+        logger.info(f"Bot restricted to chat_id: {ALLOWED_GROUP_ID}")
+    except ValueError:
+        logger.error(f"Invalid ALLOWED_GROUP_ID format: {ALLOWED_GROUP_ID}")
+        ALLOWED_GROUP_ID = None
+else:
+    logger.warning("ALLOWED_GROUP_ID not set - bot will not respond to any messages!")
+
+
+def is_chat_allowed(chat_id: int, user_id: int) -> bool:
+    """
+    Проверяет, разрешен ли чат для работы бота.
+    """
+    if not ALLOWED_GROUP_ID:
+        logger.warning(f"Unauthorized access attempt from chat_id: {chat_id} (User: {user_id}) - ALLOWED_GROUP_ID not configured")
+        return False
+    
+    if chat_id != ALLOWED_GROUP_ID:
+        logger.warning(f"Unauthorized access attempt from chat_id: {chat_id} (User: {user_id})")
+        return False
+    
+    return True
+
+
 @dp.message(CommandStart())
 async def command_start_handler(message: Message):
+    if not is_chat_allowed(message.chat.id, message.from_user.id):
+        return
     await message.answer(f"Hello, {message.from_user.full_name}! I am Mishka AI.")
+
 
 @dp.message()
 async def message_handler(message: Message):
     logger.info(f"Received message from {message.from_user.id}: {message.text}")
+
+    # Security check
+    if not is_chat_allowed(message.chat.id, message.from_user.id):
+        return
 
     if not message.text:
         return

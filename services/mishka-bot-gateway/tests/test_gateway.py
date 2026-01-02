@@ -11,15 +11,20 @@ def mock_rmq(mocker):
 def mock_bot(mocker):
     return mocker.patch("src.bot.bot", new_callable=AsyncMock)
 
+@pytest.fixture
+def set_allowed_group(mocker):
+    """Фикстура для установки ALLOWED_GROUP_ID"""
+    mocker.patch("src.bot.ALLOWED_GROUP_ID", 456)
+
 @pytest.mark.asyncio
-async def test_message_handler_publishes_to_rmq(mock_rmq):
+async def test_message_handler_publishes_to_rmq(mock_rmq, set_allowed_group):
     # Mock Telegram Message
     message = AsyncMock()
     message.text = "Hello Mishka"
     message.from_user.id = 123
     message.from_user.username = "user"
     message.from_user.full_name = "User Name"
-    message.chat.id = 456
+    message.chat.id = 456  # Matches ALLOWED_GROUP_ID
     message.date = datetime.datetime.now()
 
     await message_handler(message)
@@ -34,6 +39,42 @@ async def test_message_handler_publishes_to_rmq(mock_rmq):
     assert event["user_id"] == 123
     assert event["text"] == "Hello Mishka"
     assert event["chat_id"] == 456
+
+
+@pytest.mark.asyncio
+async def test_message_handler_blocks_unauthorized_chat(mock_rmq, set_allowed_group):
+    """Сообщение из неавторизованного чата НЕ должно публиковаться в RabbitMQ"""
+    # Mock Telegram Message from DIFFERENT chat
+    message = AsyncMock()
+    message.text = "Hello from unauthorized chat"
+    message.from_user.id = 999
+    message.from_user.username = "hacker"
+    message.from_user.full_name = "Hacker"
+    message.chat.id = 789  # Different from ALLOWED_GROUP_ID (456)
+    message.date = datetime.datetime.now()
+
+    await message_handler(message)
+
+    # Verify publish was NOT called
+    mock_rmq.publish.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_message_handler_blocks_when_no_allowed_group(mock_rmq, mocker):
+    """Если ALLOWED_GROUP_ID не задан, сообщения не обрабатываются"""
+    mocker.patch("src.bot.ALLOWED_GROUP_ID", None)
+    
+    message = AsyncMock()
+    message.text = "Hello"
+    message.from_user.id = 123
+    message.from_user.username = "user"
+    message.chat.id = 456
+    message.date = datetime.datetime.now()
+
+    await message_handler(message)
+
+    # Verify publish was NOT called
+    mock_rmq.publish.assert_not_called()
 
 @pytest.mark.asyncio
 async def test_send_message_to_user_uses_bot(mock_bot):
