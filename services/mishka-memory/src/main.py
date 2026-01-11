@@ -102,6 +102,21 @@ async def get_tools_config():
                 "required": ["city"]
             },
             "endpoint": "http://tool-weather:8000/weather"
+        },
+        {
+            "name": "remember_fact",
+            "description": "Сохранить факт в долгосрочную память. Используй, если пользователь просит запомнить или сообщает важную информацию о себе.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "Текст факта (например, 'Влад любит суши')."
+                    }
+                },
+                "required": ["text"]
+            },
+            "endpoint": "http://tool-memory:8000/run"
         }
     ]
 

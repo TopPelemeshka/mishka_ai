@@ -1,0 +1,190 @@
+- [/] Scaffolding Project Structure
+    - [x] Create root configuration files
+        - [x] .env.example
+        - [x] docker-compose.yml
+        - [x] Makefile
+    - [x] Create services structure
+        - [x] mishka-brain (Dockerfile, pyproject.toml)
+        - [x] mishka-bot-gateway (Dockerfile, pyproject.toml)
+        - [x] mishka-llm-provider (Dockerfile, pyproject.toml)
+        - [x] mishka-memory (Dockerfile, pyproject.toml)
+    - [x] Create tools structure
+        - [x] browser (Dockerfile, pyproject.toml)
+        - [x] media (Dockerfile, pyproject.toml)
+        - [x] search (Dockerfile, pyproject.toml)
+    - [x] Create infra directory
+
+- [/] Implement Infrastructure and LLM Provider
+    - [x] Update docker-compose.yml (volumes, ports)
+    - [x] Implement mishka-llm-provider
+        - [x] pyproject.toml
+        - [x] src/config.py
+        - [x] src/main.py
+        - [x] Dockerfile
+
+- [x] Setup Testing Framework
+    - [x] Create .agent/rules/02-testing.md
+    - [x] Update mishka-llm-provider dependencies (pyproject.toml, Dockerfile)
+    - [x] Implement tests (test_config.py, test_api.py)
+    - [x] Update Makefile
+
+- [x] Implement RabbitMQ and Bot Gateway
+    - [x] Update docker-compose.yml (rabbitmq volume)
+    - [x] Implement mishka-bot-gateway
+        - [x] pyproject.toml
+        - [x] src/rmq.py
+        - [x] src/bot.py
+        - [x] src/main.py
+        - [x] Dockerfile
+    - [x] Implement Gateway Tests
+    - [x] Update Makefile
+
+- [x] Debugging & Logging
+    - [x] Add logging to mishka-bot-gateway
+    - [x] Fix 401 Unauthorized in Brain
+    - [x] Fix Proxy configuration in LLM Provider
+
+- [x] Security & Stability
+    - [x] Implement Group Whitelist
+    - [x] Implement Docker Healthchecks
+
+- [x] Implement Mishka Brain (Orchestrator)
+    - [x] Update .env.example (LLM_PROVIDER_URL)
+    - [x] Update docker-compose.yml (verify mishka-brain config)
+    - [x] Implement mishka-brain
+        - [x] pyproject.toml
+        - [x] src/producer.py
+        - [x] src/graph.py
+        - [x] src/consumer.py
+        - [x] src/main.py
+        - [x] Dockerfile
+    - [x] Implement Brain Tests
+    - [x] Update Makefile
+
+- [/] Implement Memory Service
+    - [x] Update Infrastructure (Redis, docker-compose)
+    - [x] Implement mishka-memory Service
+        - [x] Models (User, ChatSettings)
+        - [x] Redis Manager
+        - [x] API Endpoints
+        - [x] Tests
+    - [x] Integrate Memory into Brain
+        - [x] Load Context
+        - [x] Save History
+    - [x] Verify contextual conversation
+
+- [x] Implement Modular Tool System
+    - [x] Create `tools/weather` Service
+        - [x] Manifest and FastAPI endpoint
+        - [x] Docker configuration
+    - [x] Implement Tool Registry in `mishka-memory`
+        - [x] `GET /tools/config` endpoint
+    - [x] Upgrade `mishka-brain` for Tool Calling
+        - [x] Tool discovery (loading from memory)
+        - [x] Prompt engineering for tools
+        - [x] Implement `tool_node` in LangGraph
+        - [x] Conditional routing logic
+    - [x] Verification
+        - [x] Integrated test: "Weather in Moscow"
+
+- [x] Implement Detailed File Logging
+    - [x] Infrastructure
+        - [x] Mount `./logs` volume in `docker-compose.yml`
+    - [x] `mishka-brain` Logging
+        - [x] Configure `loguru` to write to `logs/interactions.log` (truncate on start)
+        - [x] Instrument `graph.py` to log full prompts and tool outputs
+
+- [x] Implement Multimodal Capabilities (Sight & Hearing)
+    - [x] Infrastructure
+        - [x] Add `shared_media` volume to `docker-compose.yml`
+        - [x] Mount `/media` to Gateway, Brain, LLM Provider
+    - [x] Gateway: File Handling
+        - [x] Update `bot.py` handlers for `photo` and `voice`
+        - [x] Implement file download to `/media`
+        - [x] Update RabbitMQ message structure
+    - [x] LLM Provider: Google File API
+        - [x] Add `google-generativeai` dependency (or use raw REST if preferred, but SDK handles upload better. User mentioned `genai.upload_file`, implies SDK or similar logic. User previously removed `google-generativeai` in favor of raw HTTP, but might need it back or re-implement upload via HTTP. I will check logic. The prompt says "Load it to Google File API ... using proxy". I should probably stick to httpx if possible to keep it lightweight, or re-add SDK if complex. Actually User said "Add google-generativeai dependency" in previous steps? No, user removed it. "Add google-generativeai dependency" is absent in current instruction, but "Uploading to Google File API (genai.upload_file)" suggests using the library or mimicking it. Wait, the user prompt says: "Obnovi `mishka-llm-provider`. ... genai.upload_file ...". This implies using the official library or implementing equivalent. The official library `google-generativeai` is easier for file uploads. I will likely re-add it or implement robust multipart upload.)
+        - [x] Implement `POST /v1/chat/completions` file handling
+    - [x] Brain: Pass-through
+        - [x] Update `AgentState` to include `files`
+        - [x] Pass files from RabbitMQ event to LLM payload
+    - [x] Verification
+        - [x] Test Gateway download
+        - [x] Test LLM Provider upload logic
+
+- [x] Enhance Context and Formatting
+    - [x] Update `mishka-memory`
+        - [x] Update `HistoryMessage` schema (add `user_name`, `created_at`)
+        - [x] Update `POST /history` to accept new fields
+        - [x] Update `GET /context` to return new fields
+    - [x] Update `mishka-brain`
+        - [x] Update `consumer.py` to extract name and time
+        - [x] Implement `format_history_for_llm` in `graph.py`
+        - [x] Dynamically inject "Current Time" and "Known Users" into System Prompt
+    - [x] Verification
+    - [x] Verification
+        - [x] Verify LLM sees user names and timestamps in logs
+
+- [x] Admin Panel Backend (Mini App)
+    - [x] Infrastructure
+        - [x] Create `services/mishka-admin-backend` structure
+        - [x] Create `Dockerfile` and `pyproject.toml`
+        - [x] Add to `docker-compose.yml`
+    - [x] Implementation
+        - [x] Config & Env (`SUPERADMIN_IDS`, `ADMIN_PASSWORD`, `JWT_SECRET`)
+        - [x] Auth Logic (`initData` validation, JWT generation)
+        - [x] API Endpoints (`/auth/login`, `/status`, `/stats`)
+        - [x] Security Middleware
+    - [x] Testing
+        - [x] Test Auth (Login success/fail)
+        - [x] Test Auth (Login success/fail)
+        - [x] Test Protected Routes
+
+- [ ] Admin Panel Frontend (Mini App)
+    - [x] Infrastructure
+        - [x] Create `services/mishka-frontend` structure (package.json, vite, tailwind)
+        - [x] Create `Dockerfile` (Multi-stage: Node -> Nginx)
+        - [x] Create `nginx.conf` (Proxy `/api` -> `backend`)
+        - [x] Add to `docker-compose.yml`
+    - [x] Implementation
+        - [x] App Structure (Router, Axios, TWA SDK)
+        - [x] `Login` Page (InitData + Password)
+        - [x] `Dashboard` Page (Fetch Stats)
+
+    - [x] Verification
+        - [x] Verify Build (`npm run build`)
+        - [x] Manual Check (Mini App flow simulation)
+
+- [x] Dev Mode Support
+    - [x] Backend: Add `DEV_MODE` config
+    - [x] Backend Auth: Bypass signature for `initData="dev"`
+    - [x] Frontend: Send `initData="dev"` if local
+    - [x] Backend Auth: Bypass signature for `initData="dev"`
+    - [x] Frontend: Send `initData="dev"` if local
+    - [x] Env: Update `.env.example`
+
+- [ ] RAG Implementation (Long Term Memory)
+    - [x] LLM Provider
+        - [x] Add `POST /v1/embeddings` (Gemini `text-embedding-004`)
+        - [x] Test Embeddings Generation
+    - [x] Memory Service (Vector DB)
+        - [x] Install `qdrant-client`
+        - [x] Init Qdrant Collection (`mishka_facts`)
+        - [x] Add `POST /facts/add` (Embed -> Save)
+        - [x] Add `POST /facts/search` (Embed -> Search)
+    - [ ] Brain Service (Integration)
+    - [x] Brain Service (Integration)
+        - [x] Implement `retrieve_facts` tool/function
+        - [x] Update System Prompt with Context
+    - [x] Verification
+        - [x] Manual Test: "Remember I like sushi" -> "What do I like?"
+
+- [x] Memory Tool (Self-Learning)
+    - [x] Create `tools/memory` Service
+        - [x] `Dockerfile`
+        - [x] `src/main.py` (Manifest & Logic)
+    - [x] Update `docker-compose.yml`
+    - [x] Register Tool in DB
+    - [x] Verification
+        - [x] "My name is Vlad" -> Tool Call -> Saved
+        - [x] "Who am I?" -> RAG Retrieval -> Answer

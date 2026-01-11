@@ -130,6 +130,16 @@ services:
     container_name: tool-search
     command: python -c "import time; print('Search tool started'); time.sleep(3600)"
 
+  tool-memory:
+    build: ./tools/memory
+    container_name: tool-memory
+    ports:
+      - "8006:8000"
+    volumes:
+      - ./tools/memory:/app
+    depends_on:
+      - mishka-memory
+
   # Infra
   postgres:
     image: postgres:15-alpine
