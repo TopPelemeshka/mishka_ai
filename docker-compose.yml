@@ -66,6 +66,27 @@ services:
       mishka-brain:
         condition: service_started
 
+  mishka-initiative:
+    build: ./services/mishka-initiative
+    container_name: mishka-initiative
+    env_file: .env
+    environment:
+      - INITIATIVE_THRESHOLD=${INITIATIVE_THRESHOLD:-70}
+      - BOT_USERNAME=${BOT_USERNAME}
+      - LLM_PROVIDER_URL=${LLM_PROVIDER_URL:-http://mishka-llm-provider:8000/v1/chat/completions}
+      - LLM_MODEL=${LLM_MODEL:-gemini-1.5-flash}
+      - MEMORY_API_URL=http://mishka-memory:8000
+    volumes:
+      - ./services/mishka-initiative:/app
+      - ./logs:/app/logs
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mishka-llm-provider:
+        condition: service_started
+      mishka-memory:
+        condition: service_started
+
   mishka-llm-provider:
     build: ./services/mishka-llm-provider
     container_name: mishka-llm-provider

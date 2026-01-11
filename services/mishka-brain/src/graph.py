@@ -38,6 +38,7 @@ async def agent_node(state: AgentState):
     
     # 2. Load Context from Memory (History)
     history_messages = []
+    context = {}
     if chat_id:
         context = await get_context(chat_id)
         for msg in context.get("history", []):
