@@ -13,9 +13,16 @@ class RedisManager:
         if self.redis:
             await self.redis.close()
 
-    async def add_message(self, chat_id: int, role: str, content: str, timestamp: str):
+    async def add_message(self, chat_id: int, role: str, content: str, timestamp: str, user_name: str = None, created_at: str = None):
         key = f"chat_history:{chat_id}"
-        message = json.dumps({"role": role, "content": content, "timestamp": timestamp})
+        message_data = {
+            "role": role, 
+            "content": content, 
+            "timestamp": timestamp,
+            "user_name": user_name,
+            "created_at": created_at
+        }
+        message = json.dumps(message_data)
         
         async with self.redis.pipeline() as pipe:
             pipe.rpush(key, message)

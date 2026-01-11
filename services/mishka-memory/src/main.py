@@ -48,7 +48,9 @@ async def add_history(chat_id: int, message: HistoryMessage):
         chat_id=chat_id, 
         role=message.role, 
         content=message.content, 
-        timestamp=message.timestamp
+        timestamp=message.timestamp,
+        user_name=message.user_name,
+        created_at=message.created_at or message.timestamp
     )
     return {"status": "added"}
 

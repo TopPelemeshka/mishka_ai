@@ -4,14 +4,19 @@ from loguru import logger
 
 MEMORY_SERVICE_URL = os.getenv("MEMORY_SERVICE_URL", "http://mishka-memory:8000")
 
-async def save_message(chat_id: int, role: str, content: str):
+async def save_message(chat_id: int, role: str, content: str, user_name: str = None, created_at: str = None):
     """Save message to Memory Service."""
     if not content:
         return
         
     async with httpx.AsyncClient() as client:
         try:
-            payload = {"role": role, "content": content}
+            payload = {
+                "role": role, 
+                "content": content,
+                "user_name": user_name,
+                "created_at": created_at
+            }
             resp = await client.post(f"{MEMORY_SERVICE_URL}/history/{chat_id}", json=payload)
             resp.raise_for_status()
             logger.debug(f"Saved {role} message to memory for chat {chat_id}")

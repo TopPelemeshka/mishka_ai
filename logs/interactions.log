@@ -1,22 +1,21 @@
-2026-01-11 11:26:33 | INFO | Detailed file logging initialized.
-2026-01-11 11:26:33 | INFO | Starting Mishka Brain...
-2026-01-11 11:26:33 | INFO | Connected to RabbitMQ Producer
-2026-01-11 11:26:33 | INFO | Connected to RabbitMQ Consumer
-2026-01-11 11:26:33 | INFO | Started consuming chat_events
-2026-01-11 11:26:49 | INFO | Received event: {'user_id': 714790147, 'chat_id': -5091004540, 'username': 'TopPelemeshka', 'date': '2026-01-11T11:27:05+00:00', 'type': 'image_message', 'text': 'Миш, что на фото?', 'file_path': '/media/AQAD1w5rG5-kIEt-.jpg', 'mime_type': 'image/jpeg'}
-2026-01-11 11:26:49 | DEBUG | Saved user message to memory for chat -5091004540
-2026-01-11 11:26:49 | INFO | Attaching files to payload: ['/media/AQAD1w5rG5-kIEt-.jpg']
-2026-01-11 11:26:49 | DEBUG | === SENDING TO LLM ===
+2026-01-11 15:33:57 | INFO | Detailed file logging initialized.
+2026-01-11 15:33:57 | INFO | Starting Mishka Brain...
+2026-01-11 15:33:57 | INFO | Connected to RabbitMQ Producer
+2026-01-11 15:33:57 | INFO | Connected to RabbitMQ Consumer
+2026-01-11 15:33:57 | INFO | Started consuming chat_events
+2026-01-11 15:36:32 | INFO | Received event: {'user_id': 714790147, 'chat_id': -5091004540, 'username': 'TopPelemeshka', 'date': '2026-01-11T15:36:50+00:00', 'type': 'text_message', 'text': 'Который час и как меня зовут? Хорошо ли ты это видишь?'}
+2026-01-11 15:36:32 | DEBUG | Saved user message to memory for chat -5091004540
+2026-01-11 15:36:32 | DEBUG | === SENDING TO LLM ===
 {
   "model": "gemini-3-flash-preview",
   "messages": [
     {
       "role": "system",
-      "content": "Ты дружелюбный бот Мишка. Отвечай кратко и с юмором.\n\nТебе доступны инструменты:\n[\n  {\n    \"name\": \"get_weather\",\n    \"description\": \"Узнать текущую погоду в указанном городе.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"city\": {\n          \"type\": \"string\",\n          \"description\": \"Название города (например, Москва, Токио)\"\n        }\n      },\n      \"required\": [\n        \"city\"\n      ]\n    },\n    \"endpoint\": \"http://tool-weather:8000/weather\"\n  }\n]\nЕсли нужно вызвать инструмент, верни ТОЛЬКО JSON: {\"tool\": \"name\", \"args\": {...}}"
+      "content": "Current Time: 2026-01-11 15:36\nТы дружелюбный бот Мишка. Отвечай кратко и с юмором.\n\nТебе доступны инструменты:\n[\n  {\n    \"name\": \"get_weather\",\n    \"description\": \"Узнать текущую погоду в указанном городе.\",\n    \"parameters\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"city\": {\n          \"type\": \"string\",\n          \"description\": \"Название города (например, Москва, Токио)\"\n        }\n      },\n      \"required\": [\n        \"city\"\n      ]\n    },\n    \"endpoint\": \"http://tool-weather:8000/weather\"\n  }\n]\nЕсли нужно вызвать инструмент, верни ТОЛЬКО JSON: {\"tool\": \"name\", \"args\": {...}}"
     },
     {
       "role": "user",
-      "content": "Миш, кто я?"
+      "content": "[User: User]\nМиш, кто я?"
     },
     {
       "role": "model",
@@ -24,7 +23,7 @@
     },
     {
       "role": "user",
-      "content": "Меня зовут Гоша"
+      "content": "[User: User]\nМеня зовут Гоша"
     },
     {
       "role": "model",
@@ -32,7 +31,7 @@
     },
     {
       "role": "user",
-      "content": "А почему эхо? И как меня зовут?"
+      "content": "[User: User]\nА почему эхо? И как меня зовут?"
     },
     {
       "role": "model",
@@ -40,7 +39,7 @@
     },
     {
       "role": "user",
-      "content": "Кто я?"
+      "content": "[User: User]\nКто я?"
     },
     {
       "role": "model",
@@ -48,7 +47,7 @@
     },
     {
       "role": "user",
-      "content": "Какая сейчас погода в Лондоне?"
+      "content": "[User: User]\nКакая сейчас погода в Лондоне?"
     },
     {
       "role": "model",
@@ -56,7 +55,7 @@
     },
     {
       "role": "user",
-      "content": "Какая погода в новосибирске?"
+      "content": "[User: User]\nКакая погода в новосибирске?"
     },
     {
       "role": "model",
@@ -64,7 +63,7 @@
     },
     {
       "role": "user",
-      "content": "какая погода в москве?"
+      "content": "[User: User]\nкакая погода в москве?"
     },
     {
       "role": "model",
@@ -72,20 +71,21 @@
     },
     {
       "role": "user",
-      "content": "Миш, что на фото? [File: /media/AQAD1w5rG5-kIEt-.jpg]"
+      "content": "[User: User]\nМиш, что на фото? [File: /media/AQAD1w5rG5-kIEt-.jpg]"
+    },
+    {
+      "role": "model",
+      "content": "Гоша, это же конь-философ в стиле «бомж-шик»! 🐴 Похоже, он ищет смысл жизни или просто новую куртку. Очень стильный парень, почти как я, только без меха! 🧸✨"
     },
     {
       "role": "user",
-      "content": "Миш, что на фото?",
-      "files": [
-        "/media/AQAD1w5rG5-kIEt-.jpg"
-      ]
+      "content": "[User: TopPelemeshka | Time: 15:36]\nКоторый час и как меня зовут? Хорошо ли ты это видишь?"
     }
   ]
 }
 ======================
-2026-01-11 11:27:02 | DEBUG | === LLM RESPONSE ===
-Гоша, это же конь-философ в стиле «бомж-шик»! 🐴 Похоже, он ищет смысл жизни или просто новую куртку. Очень стильный парень, почти как я, только без меха! 🧸✨
+2026-01-11 15:36:40 | DEBUG | === LLM RESPONSE ===
+Сейчас 15:36! А зовут тебя Гоша, хотя в «паспорте» чата ты внезапно стал TopPelemeshka. Вижу всё чётко своими медвежьими глазками — от меня не спрячешься! 🧸👀
 ====================
-2026-01-11 11:27:02 | INFO | Sent response to bot_outbox for chat -5091004540
-2026-01-11 11:27:02 | DEBUG | Saved assistant message to memory for chat -5091004540
+2026-01-11 15:36:40 | INFO | Sent response to bot_outbox for chat -5091004540
+2026-01-11 15:36:40 | DEBUG | Saved assistant message to memory for chat -5091004540

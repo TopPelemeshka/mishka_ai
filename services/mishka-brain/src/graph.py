@@ -46,20 +46,67 @@ async def agent_node(state: AgentState):
         tools_desc = "\n\nТебе доступны инструменты:\n" + json.dumps(tools, ensure_ascii=False, indent=2)
         tools_desc += "\nЕсли нужно вызвать инструмент, верни ТОЛЬКО JSON: {\"tool\": \"name\", \"args\": {...}}"
     
-    system_prompt = SYSTEM_PROMPT_BASE + tools_desc
-    
+    import datetime
+
     # 4. Convert currentTurn messages and deduplicate
     current_messages = []
+    
+    # helper to format message content
+    def format_content(role, content, user_name=None, created_at=None):
+        if role == "user":
+            name = user_name or "User"
+            time_str = ""
+            if created_at:
+                try:
+                    # Try parsing ISO
+                    dt = datetime.datetime.fromisoformat(created_at)
+                    time_str = f" | Time: {dt.strftime('%H:%M')}"
+                except:
+                    pass
+            return f"[User: {name}{time_str}]\n{content}"
+        return content
+
     for msg in messages:
         if isinstance(msg, HumanMessage):
+             # For current turn messages, we might not have metadata in the object itself easily
+             # unless we passed it in state. But state["messages"] are usually just LangChain messages.
+             # However, consumer passes input_state with messages.
+             # We rely on "current" message not needing formatting because it's "now". 
+             # Wait, user wants LLM to know who is speaking NOW too.
+             # Logic: consumer triggers run. The last message is from user. 
+             # We can't easily modify the HumanMessage object in consumer to add metadata that LangChain preserves?
+             # Actually, we can just format the content in consumer before creating HumanMessage? 
+             # OR we format it here if we assume it's the current user.
+             # Let's keep current messages simple for now, or format them if we can.
+             # Actually, the requirement says "Format message User...". 
+             # Let's format history first, that's critical. 
+             # Current message is usually implied to be from the active user.
+             
             if history_messages and history_messages[-1]["content"] == msg.content:
                 continue
             current_messages.append({"role": "user", "content": msg.content})
         elif isinstance(msg, AIMessage):
             current_messages.append({"role": "model", "content": msg.content})
 
+    # Re-process history messages to format them
+    formatted_history = []
+    for msg in context.get("history", []):
+         f_role = msg["role"]
+         f_content = msg["content"]
+         if f_role == "user":
+             f_content = format_content("user", f_content, msg.get("user_name"), msg.get("created_at"))
+             formatted_history.append({"role": "user", "content": f_content})
+         elif f_role == "assistant":
+             formatted_history.append({"role": "model", "content": f_content})
+         elif f_role == "tool":
+             formatted_history.append({"role": "user", "content": f"Результат инструмента: {f_content}"})
+
+    # Dynamic System Prompt
+    current_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    system_prompt = f"Current Time: {current_time_str}\n" + SYSTEM_PROMPT_BASE + tools_desc
+
     formatted_messages = [{"role": "system", "content": system_prompt}]
-    formatted_messages.extend(history_messages)
+    formatted_messages.extend(formatted_history)
     formatted_messages.extend(current_messages)
 
     # Attach files to the last message if available and it is a user message

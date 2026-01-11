@@ -39,6 +39,21 @@ class RabbitMQConsumer:
                 text = data.get("text")
                 file_path = data.get("file_path")
                 
+                # Context info
+                # "username" in telegram is @handle, which might be None. "first_name" is better for "name".
+                # Gateway sends "username" but we might need to check if we can get first_name from gateway event?
+                # Let's check bot.py ... event has "username" (from_user.username). 
+                # Ideally we want Display Name. 
+                # Assuming Gateway sends "username", let's use what we have or update Gateway later.
+                # Wait, user request says: "Extract first_name (or username)".
+                # I should check what Gateway sends. It sends "username". 
+                # I will use "username" for now as "user_name" or "Display Name" if simple.
+                # Actually, let's look at `bot.py` again. It sends `username`.
+                # If I want `first_name`, I need to update Gateway.
+                # But for now let's use `username` as `user_name`.
+                user_name = data.get("username") or "User"
+                date_str = data.get("date") # ISO format from gateway
+
                 # Check for content (text or file)
                 if not text and not file_path:
                     logger.warning("Empty content in message")
@@ -52,7 +67,15 @@ class RabbitMQConsumer:
                     content_to_save = text
                     if file_path:
                         content_to_save += f" [File: {file_path}]"
-                    await save_message(chat_id=chat_id, role="user", content=content_to_save)
+                    
+                    # Save with metadata
+                    await save_message(
+                        chat_id=chat_id, 
+                        role="user", 
+                        content=content_to_save,
+                        user_name=user_name,
+                        created_at=date_str
+                    )
 
                 # Invoke Graph
                 # Pass chat_id to state

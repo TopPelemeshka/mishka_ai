@@ -20,6 +20,8 @@ class HistoryMessage(BaseModel):
     role: str # "user", "assistant", or "tool"
     content: str
     timestamp: Optional[str] = None
+    user_name: Optional[str] = None # Display name of the sender
+    created_at: Optional[str] = None # ISO format time specific for the message context
 
 class ContextResponse(BaseModel):
     user: Optional[UserResponse] = None
