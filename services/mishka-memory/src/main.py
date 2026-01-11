@@ -7,6 +7,20 @@ from src.database import get_db, init_db
 from src.redis_manager import redis_manager
 from src.models import User
 from src.schemas import UserCreate, UserResponse, HistoryMessage, ContextResponse
+import httpx
+import os
+from pydantic import BaseModel
+from src.qdrant import qdrant_manager
+
+LLM_EMBEDDING_URL = os.getenv("LLM_EMBEDDING_URL", "http://mishka-llm-provider:8000/v1/embeddings")
+
+class FactRequest(BaseModel):
+    text: str
+    metadata: dict = {}
+
+class SearchRequest(BaseModel):
+    query: str
+    limit: int = 5
 
 app = FastAPI()
 
@@ -90,3 +104,58 @@ async def get_tools_config():
             "endpoint": "http://tool-weather:8000/weather"
         }
     ]
+
+@app.post("/facts/add")
+async def add_fact(request: FactRequest):
+    if not qdrant_manager:
+        raise HTTPException(status_code=503, detail="Vector DB not available")
+    
+    # 1. Get Embedding
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                LLM_EMBEDDING_URL,
+                json={
+                    "content": request.text,
+                    "task_type": "retrieval_document"
+                },
+                timeout=30.0
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"LLM Error: {resp.text}")
+            
+            embedding = resp.json().get("embedding")
+    except Exception as e:
+         raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
+
+    # 2. Save to Qdrant
+    point_id = qdrant_manager.add_fact(request.text, embedding, request.metadata)
+    return {"status": "ok", "id": point_id}
+
+
+@app.post("/facts/search")
+async def search_facts(request: SearchRequest):
+    if not qdrant_manager:
+        raise HTTPException(status_code=503, detail="Vector DB not available")
+
+    # 1. Get Embedding for Query
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(
+                LLM_EMBEDDING_URL,
+                json={
+                    "content": request.query,
+                    "task_type": "retrieval_query"
+                },
+                timeout=30.0
+            )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"LLM Error: {resp.text}")
+            
+            embedding = resp.json().get("embedding")
+    except Exception as e:
+         raise HTTPException(status_code=502, detail=f"Embedding failed: {e}")
+
+    # 2. Search Qdrant
+    results = qdrant_manager.search_facts(embedding, limit=request.limit)
+    return {"results": results}

@@ -15,7 +15,19 @@ class AgentState(TypedDict):
     files: List[str] # List of file paths for the current turn
 
 LLM_PROVIDER_URL = os.getenv("LLM_PROVIDER_URL", "http://mishka-llm-provider:8000/v1/chat/completions")
+MEMORY_API_URL = os.getenv("MEMORY_API_URL", "http://mishka-memory:8000/facts/search")
 SYSTEM_PROMPT_BASE = "Ты дружелюбный бот Мишка. Отвечай кратко и с юмором."
+
+async def retrieve_facts(query: str):
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.post(MEMORY_API_URL, json={"query": query, "limit": 3}, timeout=5.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("results", [])
+        except Exception as e:
+            logger.warning(f"Failed to retrieve facts: {e}")
+    return []
 
 async def agent_node(state: AgentState):
     messages = state["messages"]
@@ -103,7 +115,19 @@ async def agent_node(state: AgentState):
 
     # Dynamic System Prompt
     current_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-    system_prompt = f"Current Time: {current_time_str}\n" + SYSTEM_PROMPT_BASE + tools_desc
+    
+    # RAG: Retrieve relevant facts
+    relevant_facts = ""
+    try:
+        last_msg_content = messages[-1].content if messages else ""
+        if last_msg_content:
+            facts = await retrieve_facts(last_msg_content)
+            if facts:
+                relevant_facts = "\n\nНайденные факты из памяти:\n" + "\n".join([f"- {f['text']}" for f in facts])
+    except Exception as e:
+        logger.error(f"RAG Error: {e}")
+
+    system_prompt = f"Current Time: {current_time_str}\n" + SYSTEM_PROMPT_BASE + relevant_facts + tools_desc
 
     formatted_messages = [{"role": "system", "content": system_prompt}]
     formatted_messages.extend(formatted_history)

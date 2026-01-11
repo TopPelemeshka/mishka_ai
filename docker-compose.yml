@@ -87,7 +87,10 @@ services:
     volumes:
       - ./services/mishka-memory:/app
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8003:8000"
     environment:
+      - QDRANT_HOST=mishka_qdrant
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=${POSTGRES_USER:-mishka}

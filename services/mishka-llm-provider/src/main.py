@@ -37,6 +37,13 @@ class ChatCompletionRequest(BaseModel):
     temperature: Optional[float] = 0.7
     api_key: Optional[str] = None
 
+class EmbeddingRequest(BaseModel):
+    content: str
+    task_type: str = "retrieval_document" # retrieval_query, retrieval_document, semantic_similarity, classification, clustering
+    model: str = "models/text-embedding-004"
+    output_dimensionality: Optional[int] = 768
+    api_key: Optional[str] = None
+
 
 def upload_file_to_gemini(file_path: str, api_key: str):
     """
@@ -197,3 +204,42 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
 @app.get("/health")
 async def health():
     return {"status": "ok", "proxy": LLM_PROXY or "none"}
+
+
+@app.post("/v1/embeddings")
+async def create_embedding(request_body: EmbeddingRequest, request: Request):
+    try:
+        # Auth (Reuse logic)
+        api_key = None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            api_key = auth_header.split(" ")[1]
+        if not api_key:
+            api_key = request_body.api_key or GOOGLE_API_KEY
+        if not api_key:
+            raise HTTPException(status_code=401, detail="API Key not provided")
+
+        genai.configure(api_key=api_key)
+        
+        # Call Gemini Embedding API
+        # Proxy is handled via os.environ["HTTP_PROXY"] set at startup
+        print(f"Generating embedding for task={request_body.task_type}")
+        
+        result = genai.embed_content(
+            model=request_body.model,
+            content=request_body.content,
+            task_type=request_body.task_type,
+            output_dimensionality=request_body.output_dimensionality
+        )
+        
+        return {
+            "embedding": result['embedding'],
+            "model": request_body.model
+        }
+
+    except Exception as e:
+        print(f"Embedding Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
