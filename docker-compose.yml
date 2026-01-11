@@ -22,6 +22,24 @@ services:
       mishka-memory:
         condition: service_started
 
+  mishka-admin-backend:
+    build:
+      context: ./services/mishka-admin-backend
+    container_name: mishka-admin-backend
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
+      - JWT_SECRET=${JWT_SECRET:-unsafe_secret}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SUPERADMIN_IDS=${ALLOWED_GROUP_ID}
+      - VIEWER_IDS=
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./services/mishka-admin-backend:/app
+    depends_on:
+      - mishka-brain
+      - mishka-memory
+
   mishka-bot-gateway:
     build: ./services/mishka-bot-gateway
     container_name: mishka-bot-gateway

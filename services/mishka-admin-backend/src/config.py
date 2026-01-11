@@ -1,0 +1,33 @@
+import os
+from typing import List
+from pydantic_settings import BaseSettings
+
+class Settings(BaseSettings):
+    # Security
+    ADMIN_PASSWORD: str = "change_me_please" # Default for dev if missing
+    JWT_SECRET: str = "unsafe_secret_for_dev"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    
+    # Telegram
+    TELEGRAM_BOT_TOKEN: str # Using same env name as Gateway for consistency
+    
+    # Access Control (strings of comma-separated IDs)
+    SUPERADMIN_IDS: str = "" # e.g. "123456,789012"
+    VIEWER_IDS: str = "" # e.g. "111222"
+
+    @property
+    def superadmin_ids_list(self) -> List[int]:
+        if not self.SUPERADMIN_IDS: return []
+        return [int(x.strip()) for x in self.SUPERADMIN_IDS.split(",") if x.strip()]
+
+    @property
+    def viewer_ids_list(self) -> List[int]:
+        if not self.VIEWER_IDS: return []
+        return [int(x.strip()) for x in self.VIEWER_IDS.split(",") if x.strip()]
+
+    class Config:
+        env_file = ".env"
+        extra = "ignore" 
+
+settings = Settings()
