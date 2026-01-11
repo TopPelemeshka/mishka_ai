@@ -42,10 +42,17 @@ class RabbitMQConsumer:
                     logger.warning("Empty text in message")
                     return
 
+                # Save User Message to Memory
+                if chat_id:
+                    from src.utils import save_message
+                    await save_message(chat_id=chat_id, role="user", content=text)
+
                 # Invoke Graph
-                # Initial state: just the user message. 
-                # In full version we would load history from Memory service.
-                input_state = {"messages": [HumanMessage(content=text)]}
+                # Pass chat_id to state
+                input_state = {
+                    "messages": [HumanMessage(content=text)],
+                    "chat_id": chat_id
+                }
                 
                 result = await graph.ainvoke(input_state)
                 

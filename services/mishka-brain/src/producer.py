@@ -42,6 +42,10 @@ class RabbitMQProducer:
             routing_key="bot_outbox"
         )
         logger.info(f"Sent response to bot_outbox for chat {chat_id}")
+        
+        # Save Assistant Message to Memory
+        from src.utils import save_message
+        await save_message(chat_id=chat_id, role="assistant", content=text)
 
     async def close(self):
         if self.connection:

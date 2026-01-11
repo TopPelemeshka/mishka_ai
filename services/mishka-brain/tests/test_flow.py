@@ -13,8 +13,11 @@ def mock_producer(mocker):
     return mocker.patch("src.consumer.producer", new_callable=AsyncMock)
 
 @pytest.mark.asyncio
-async def test_process_message_flow(mock_graph, mock_producer):
+async def test_process_message_flow(mock_graph, mock_producer, mocker):
     consumer = RabbitMQConsumer()
+    
+    # Mock save_message
+    mock_save_message = mocker.patch("src.utils.save_message", new_callable=AsyncMock)
     
     # Mock message
     message = MagicMock()
@@ -33,8 +36,13 @@ async def test_process_message_flow(mock_graph, mock_producer):
     
     await consumer.process_message(message)
     
-    # Verify graph called
+    # Verify save_message called
+    mock_save_message.assert_called_once_with(chat_id=100, role="user", content="Hello")
+    
+    # Verify graph called with chat_id
     mock_graph.ainvoke.assert_called_once()
+    args, _ = mock_graph.ainvoke.call_args
+    assert args[0]["chat_id"] == 100
     
     # Verify producer called
     mock_producer.send_response.assert_called_once_with(100, "Response from AI")

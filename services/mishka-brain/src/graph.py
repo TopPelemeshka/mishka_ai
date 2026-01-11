@@ -5,24 +5,55 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
 from loguru import logger
 
+from src.utils import get_context
+
 class AgentState(TypedDict):
     messages: List[BaseMessage]
+    chat_id: int
 
 LLM_PROVIDER_URL = os.getenv("LLM_PROVIDER_URL", "http://mishka-llm-provider:8000/v1/chat/completions")
 SYSTEM_PROMPT = "Ты дружелюбный бот Мишка. Отвечай кратко и с юмором."
 
 async def agent_node(state: AgentState):
     messages = state["messages"]
+    chat_id = state.get("chat_id")
     
-    # Convert messages to format expected by LLM Provider
-    # Assuming the provider expects OpenAI-like format: [{"role": "user", "content": "..."}]
-    formatted_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Load Context from Memory
+    history_messages = []
+    if chat_id:
+        context = await get_context(chat_id)
+        # Parse history
+        for msg in context.get("history", []):
+            role = msg["role"] # "user" or "assistant"
+            content = msg["content"]
+            if role == "user":
+                history_messages.append({"role": "user", "content": content})
+            elif role == "assistant":
+                history_messages.append({"role": "model", "content": content})
     
+    # Convert current session messages
+    current_messages = []
     for msg in messages:
         if isinstance(msg, HumanMessage):
-            formatted_messages.append({"role": "user", "content": msg.content})
+             # Skip if duplicate of last history message
+             role = "user"
+             content = msg.content
+             
+             # Check if this exact message is already the last one in history
+             if history_messages:
+                 last_history = history_messages[-1]
+                 if last_history["role"] == role and last_history["content"] == content:
+                     logger.debug(f"Skipping duplicate message in prompt: {content[:20]}...")
+                     continue
+
+             current_messages.append({"role": role, "content": content})
         elif isinstance(msg, AIMessage):
-             formatted_messages.append({"role": "model", "content": msg.content}) # Gemini uses 'model' role often, or 'assistant'
+             current_messages.append({"role": "model", "content": msg.content})
+
+    # Combine: System + History + Current
+    formatted_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    formatted_messages.extend(history_messages)
+    formatted_messages.extend(current_messages)
 
     payload = {
         "model": os.getenv("LLM_MODEL", "gemini-pro"),

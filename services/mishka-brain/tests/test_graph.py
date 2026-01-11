@@ -18,12 +18,33 @@ async def test_agent_node_success(mocker):
     
     mocker.patch("httpx.AsyncClient", return_value=mock_client)
     
-    state = {"messages": [HumanMessage(content="Hi")]}
+    # Mock get_context
+    mock_get_context = mocker.patch("src.graph.get_context", new_callable=AsyncMock)
+    mock_get_context.return_value = {
+        "history": [
+            {"role": "user", "content": "Prev User"},
+            {"role": "assistant", "content": "Prev Bot"}
+        ]
+    }
+    
+    state = {"messages": [HumanMessage(content="Hi")], "chat_id": 123}
     result = await agent_node(state)
     
     assert "messages" in result
     assert isinstance(result["messages"][0], AIMessage)
     assert result["messages"][0].content == "Hello Human!"
+    
+    # Verify call to LLM included history
+    # We inspect the arguments passed to client.post
+    args, kwargs = mock_client.post.call_args
+    payload = kwargs["json"]
+    messages = payload["messages"]
+    
+    # Expect: System + User(Prev) + Model(Prev) + User(Current)
+    assert len(messages) == 4
+    assert messages[1]["content"] == "Prev User"
+    assert messages[2]["content"] == "Prev Bot"
+    assert messages[3]["content"] == "Hi"
 
 @pytest.mark.asyncio
 async def test_agent_node_error(mocker):
@@ -39,4 +60,4 @@ async def test_agent_node_error(mocker):
     result = await agent_node(state)
     
     assert "messages" in result
-    assert "Ошибка LLM" in result["messages"][0].content
+    assert "Ошибка Brain" in result["messages"][0].content

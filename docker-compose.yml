@@ -54,10 +54,22 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-memory:/app
-    command: python -c "import time; print('Memory service started'); time.sleep(3600)"
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-mishka}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret}
+      - POSTGRES_DB=${POSTGRES_DB:-mishka_db}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
-      - postgres
-      - qdrant
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
 
   # Tools
   tool-browser:
@@ -87,6 +99,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mishka} -d ${POSTGRES_DB:-mishka_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -110,7 +127,21 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: mishka_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   qdrant_data:
   rabbitmq_data:
+  redis_data:
