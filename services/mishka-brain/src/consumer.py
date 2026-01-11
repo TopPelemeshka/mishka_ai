@@ -102,9 +102,11 @@ class RabbitMQConsumer:
         if not self.channel:
             raise RuntimeError("Consumer not connected")
             
-        queue = await self.channel.declare_queue("chat_events", durable=True)
+        # Updated to listen to filtered tasks from Initiative Service
+        QUEUE_NAME = "brain_tasks"
+        queue = await self.channel.declare_queue(QUEUE_NAME, durable=True)
         await queue.consume(self.process_message)
-        logger.info("Started consuming chat_events")
+        logger.info(f"Started consuming {QUEUE_NAME}")
 
     async def close(self):
         if self.connection:

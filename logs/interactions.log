@@ -1,5 +1,0 @@
-2026-01-11 17:56:46 | INFO | Detailed file logging initialized.
-2026-01-11 17:56:46 | INFO | Starting Mishka Brain...
-2026-01-11 17:56:46 | INFO | Connected to RabbitMQ Producer
-2026-01-11 17:56:46 | INFO | Connected to RabbitMQ Consumer
-2026-01-11 17:56:46 | INFO | Started consuming chat_events

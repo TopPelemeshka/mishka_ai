@@ -8,12 +8,12 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from src.config import LLM_PROXY
+from src.key_manager import key_manager
 
 app = FastAPI(title="Mishka LLM Provider")
 
 # Gemini API Configuration
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 
 # Proxy Configuration
 PROXY_CONFIG = None
@@ -131,74 +131,109 @@ def convert_messages_to_gemini_format(messages: List[Message], api_key: str) -> 
 
 @app.post("/v1/chat/completions")
 async def chat_completions(request_body: ChatCompletionRequest, request: Request):
-    try:
-        # Determine API Key (Header > Body > Env)
-        api_key = None
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            api_key = auth_header.split(" ")[1]
-        if not api_key:
-            api_key = request_body.api_key
-        if not api_key:
-            api_key = GOOGLE_API_KEY
-        if not api_key:
-            raise HTTPException(status_code=401, detail="API Key not provided")
+    # Determine API Key (Header > Body > Env)
+    user_provided_key = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        user_provided_key = auth_header.split(" ")[1]
+    if not user_provided_key:
+        user_provided_key = request_body.api_key
 
-        # Build Gemini API URL
-        model_name = request_body.model
-        url = f"{GEMINI_API_URL}/{model_name}:generateContent?key={api_key}"
-        
-        # Convert messages (Sync upload for now to keep logic simple)
-        # In production this should be async, but SDK is sync.
-        payload = convert_messages_to_gemini_format(request_body.messages, api_key)
-        
-        payload["generationConfig"] = {
-            "temperature": request_body.temperature
-        }
-        
-        print(f"Calling Gemini API: model={model_name}")
-        
-        # Make request with explicit proxy
-        async with httpx.AsyncClient(proxy=LLM_PROXY, timeout=120.0) as client:
-            response = await client.post(url, json=payload)
+    # If user provided key, use it (single attempt)
+    keys_to_try = [user_provided_key] if user_provided_key else None
+
+    # If no user key, get all system keys for rotation
+    # We don't just get all keys locally, we want to try them in order starting from 'next'.
+    # But simple approach: Loop up to N times, getting 'next' key each time.
+    max_retries = 1
+    if not user_provided_key:
+        # Try at least as many times as we have keys, or a fixed limit (e.g. 5)
+        # To avoid infinite loops if all fail.
+        total_keys = len(key_manager.get_all_keys())
+        max_retries = total_keys if total_keys > 0 else 1
+
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            # Get Key
+            if user_provided_key:
+                api_key = user_provided_key
+            else:
+                api_key = key_manager.get_next_key()
             
-            if response.status_code != 200:
-                error_detail = response.text
-                print(f"Gemini API Error: {response.status_code} - {error_detail}")
-                raise HTTPException(status_code=response.status_code, detail=error_detail)
+            if not api_key:
+                raise HTTPException(status_code=401, detail="No API Keys available in configuration")
+
+            # Build Gemini API URL
+            model_name = request_body.model
+            url = f"{GEMINI_API_URL}/{model_name}:generateContent?key={api_key}"
             
-            data = response.json()
-        
-        # Extract response text
-        candidates = data.get("candidates", [])
-        if not candidates:
-            # Handle empty response (e.g., blocked content)
-            print(f"Empty candidates: {data}")
-            raise HTTPException(status_code=500, detail="No response from Gemini (Safety?)")
-        
-        content = candidates[0].get("content", {})
-        parts = content.get("parts", [])
-        text = parts[0].get("text", "") if parts else ""
-        
-        # Return in OpenAI-compatible format
-        return {
-            "choices": [
-                {
-                    "message": {
-                        "role": "assistant",
-                        "content": text
+            # Convert messages (Uploads files using CURRENT key)
+            # This ensures file permissions match the generation request key
+            payload = convert_messages_to_gemini_format(request_body.messages, api_key)
+            
+            payload["generationConfig"] = {
+                "temperature": request_body.temperature
+            }
+            
+            print(f"Calling Gemini API: model={model_name} (Attempt {attempt+1}/{max_retries})")
+            
+            # Make request with explicit proxy
+            async with httpx.AsyncClient(proxy=LLM_PROXY, timeout=120.0) as client:
+                response = await client.post(url, json=payload)
+                
+                if response.status_code != 200:
+                    error_detail = response.text
+                    print(f"Gemini API Error: {response.status_code} - {error_detail}")
+                    
+                    # If 429 Resource Exhausted, try next key
+                    if response.status_code == 429:
+                        last_error = f"429: {error_detail}"
+                        if user_provided_key: # Cannot rotate user provided key
+                            break 
+                        print("Rate limit hit, rotating key...")
+                        continue # Try next key
+                        
+                    raise HTTPException(status_code=response.status_code, detail=error_detail)
+                
+                data = response.json()
+            
+            # Extract response text
+            candidates = data.get("candidates", [])
+            if not candidates:
+                # Handle empty response
+                print(f"Empty candidates: {data}")
+                raise HTTPException(status_code=500, detail="No response from Gemini (Safety?)")
+            
+            content = candidates[0].get("content", {})
+            parts = content.get("parts", [])
+            text = parts[0].get("text", "") if parts else ""
+            
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": text
+                        }
                     }
-                }
-            ]
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+                ]
+            }
+            
+        except HTTPException:
+            if attempt == max_retries - 1:
+                raise
+        except Exception as e:
+            print(f"Error attempt {attempt}: {e}")
+            last_error = str(e)
+            if attempt == max_retries - 1:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"All retries failed. Last error: {last_error}")
+
+    # If we fell out of loop
+    raise HTTPException(status_code=429, detail=f"Rate limit exceeded on all keys. Last error: {last_error}")
 
 
 @app.get("/health")
@@ -208,38 +243,67 @@ async def health():
 
 @app.post("/v1/embeddings")
 async def create_embedding(request_body: EmbeddingRequest, request: Request):
-    try:
-        # Auth (Reuse logic)
-        api_key = None
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
-            api_key = auth_header.split(" ")[1]
-        if not api_key:
-            api_key = request_body.api_key or GOOGLE_API_KEY
-        if not api_key:
-            raise HTTPException(status_code=401, detail="API Key not provided")
+    # Auth (Reuse logic mostly)
+    user_provided_key = None
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        user_provided_key = auth_header.split(" ")[1]
+    if not user_provided_key:
+        user_provided_key = request_body.api_key
 
-        genai.configure(api_key=api_key)
-        
-        # Call Gemini Embedding API
-        # Proxy is handled via os.environ["HTTP_PROXY"] set at startup
-        print(f"Generating embedding for task={request_body.task_type}")
-        
-        result = genai.embed_content(
-            model=request_body.model,
-            content=request_body.content,
-            task_type=request_body.task_type,
-            output_dimensionality=request_body.output_dimensionality
-        )
-        
-        return {
-            "embedding": result['embedding'],
-            "model": request_body.model
-        }
+    max_retries = 1
+    if not user_provided_key:
+        total_keys = len(key_manager.get_all_keys())
+        max_retries = total_keys if total_keys > 0 else 1
 
-    except Exception as e:
-        print(f"Embedding Error: {e}")
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+    last_error = None
+
+    for attempt in range(max_retries):
+        try:
+            if user_provided_key:
+                api_key = user_provided_key
+            else:
+                api_key = key_manager.get_next_key()
+            
+            if not api_key:
+                raise HTTPException(status_code=401, detail="API Key not provided")
+
+            genai.configure(api_key=api_key)
+            
+            # Call Gemini Embedding API
+            print(f"Generating embedding for task={request_body.task_type} (Attempt {attempt+1}/{max_retries})")
+            
+            result = genai.embed_content(
+                model=request_body.model,
+                content=request_body.content,
+                task_type=request_body.task_type,
+                output_dimensionality=request_body.output_dimensionality
+            )
+            
+            return {
+                "embedding": result['embedding'],
+                "model": request_body.model
+            }
+
+        except Exception as e:
+            print(f"Embedding Error attempt {attempt}: {e}")
+            last_error = str(e)
+            
+            # Check for Rate Limit in exception message
+            if "429" in str(e) or "ResourceExhausted" in str(e) or "quota" in str(e).lower():
+                if user_provided_key:
+                    break
+                print("Rate limit hit (embedding), rotating key...")
+                continue
+            
+            # If other error, maybe break or continue?
+            # Safe to retry for 503s etc, but SDK might hide status codes.
+            # We continue if multiple keys available.
+            
+            if attempt == max_retries - 1:
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=str(e))
+    
+    raise HTTPException(status_code=429, detail=f"Rate limit exceeded (embeddings). Last error: {last_error}")
 

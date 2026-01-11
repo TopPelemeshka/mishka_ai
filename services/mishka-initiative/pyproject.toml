@@ -1,0 +1,14 @@
+[project]
+name = "mishka-initiative"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "aio-pika",
+    "pydantic-settings",
+    "httpx",
+    "loguru"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
