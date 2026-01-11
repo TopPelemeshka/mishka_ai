@@ -30,6 +30,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - JWT_SECRET=${JWT_SECRET:-unsafe_secret}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - DEV_MODE=${DEV_MODE:-false}
       - SUPERADMIN_IDS=${ALLOWED_GROUP_ID}
       - VIEWER_IDS=
     ports:
@@ -39,6 +40,15 @@ services:
     depends_on:
       - mishka-brain
       - mishka-memory
+
+  mishka-frontend:
+    build:
+      context: ./services/mishka-frontend
+    container_name: mishka-frontend
+    ports:
+      - "8082:80"
+    depends_on:
+      - mishka-admin-backend
 
   mishka-bot-gateway:
     build: ./services/mishka-bot-gateway

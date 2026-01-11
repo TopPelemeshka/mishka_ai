@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     
     # Telegram
     TELEGRAM_BOT_TOKEN: str # Using same env name as Gateway for consistency
+    DEV_MODE: bool = False # Bypass signature check for local testing
     
     # Access Control (strings of comma-separated IDs)
     SUPERADMIN_IDS: str = "" # e.g. "123456,789012"

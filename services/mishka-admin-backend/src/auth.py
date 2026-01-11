@@ -37,6 +37,13 @@ def verify_telegram_auth(init_data: str) -> int:
     Verifies initData string from Telegram Mini App.
     Returns user_id if valid, raises ValueError if invalid.
     """
+    # DEV_MODE Bypass
+    if settings.DEV_MODE and init_data == "dev":
+        # Return first superadmin ID or a default dummy ID
+        if settings.superadmin_ids_list:
+            return settings.superadmin_ids_list[0]
+        return 123456789 # Fallback dummy ID
+
     try:
         # aiogram 3.x utility
         # check_webapp_signature(bot_token, init_data) matches the hash
