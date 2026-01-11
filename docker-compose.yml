@@ -8,6 +8,7 @@ services:
     volumes:
       - ./services/mishka-brain:/app
       - ./logs:/app/logs
+      - shared_media:/media
     environment:
       - LLM_PROVIDER_URL=${LLM_PROVIDER_URL:-http://mishka-llm-provider:8000/v1/chat/completions}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -27,6 +28,7 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-bot-gateway:/app
+      - shared_media:/media
     environment:
       - ALLOWED_GROUP_ID=${ALLOWED_GROUP_ID:-}
     command: python src/main.py
@@ -42,6 +44,7 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-llm-provider:/app
+      - shared_media:/media
     environment:
       - HTTP_PROXY=${LLM_PROXY}
       - HTTPS_PROXY=${LLM_PROXY}
@@ -152,5 +155,6 @@ services:
 volumes:
   postgres_data:
   qdrant_data:
+  shared_media:
   rabbitmq_data:
   redis_data:

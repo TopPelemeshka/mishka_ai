@@ -37,21 +37,29 @@ class RabbitMQConsumer:
                 user_id = data.get("user_id")
                 chat_id = data.get("chat_id")
                 text = data.get("text")
+                file_path = data.get("file_path")
                 
-                if not text:
-                    logger.warning("Empty text in message")
+                # Check for content (text or file)
+                if not text and not file_path:
+                    logger.warning("Empty content in message")
                     return
 
                 # Save User Message to Memory
+                # Note: We currently only save text to memory history. 
+                # Files are transient for the current turn.
                 if chat_id:
                     from src.utils import save_message
-                    await save_message(chat_id=chat_id, role="user", content=text)
+                    content_to_save = text
+                    if file_path:
+                        content_to_save += f" [File: {file_path}]"
+                    await save_message(chat_id=chat_id, role="user", content=content_to_save)
 
                 # Invoke Graph
                 # Pass chat_id to state
                 input_state = {
-                    "messages": [HumanMessage(content=text)],
-                    "chat_id": chat_id
+                    "messages": [HumanMessage(content=text or "")],
+                    "chat_id": chat_id,
+                    "files": [file_path] if file_path else []
                 }
                 
                 result = await graph.ainvoke(input_state)

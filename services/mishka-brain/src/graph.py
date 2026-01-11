@@ -11,7 +11,8 @@ from src.utils import get_context, list_tools
 class AgentState(TypedDict):
     messages: List[BaseMessage]
     chat_id: int
-    tools: List[dict] # New: list of available tools
+    tools: List[dict]
+    files: List[str] # List of file paths for the current turn
 
 LLM_PROVIDER_URL = os.getenv("LLM_PROVIDER_URL", "http://mishka-llm-provider:8000/v1/chat/completions")
 SYSTEM_PROMPT_BASE = "Ты дружелюбный бот Мишка. Отвечай кратко и с юмором."
@@ -60,6 +61,14 @@ async def agent_node(state: AgentState):
     formatted_messages = [{"role": "system", "content": system_prompt}]
     formatted_messages.extend(history_messages)
     formatted_messages.extend(current_messages)
+
+    # Attach files to the last message if available and it is a user message
+    files = state.get("files", [])
+    if files and formatted_messages:
+        last_msg = formatted_messages[-1]
+        if last_msg["role"] == "user":
+            last_msg["files"] = files
+            logger.info(f"Attaching files to payload: {files}")
 
     payload = {
         "model": os.getenv("LLM_MODEL", "gemini-pro"),

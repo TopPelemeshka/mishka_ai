@@ -3,6 +3,7 @@ Mishka LLM Provider - использует прямые REST вызовы к Gem
 """
 import os
 import httpx
+import google.generativeai as genai
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
@@ -18,22 +19,9 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
 PROXY_CONFIG = None
 if LLM_PROXY:
     print(f"Using Proxy: {LLM_PROXY}")
-    PROXY_CONFIG = {
-        "http://": LLM_PROXY,
-        "https://": LLM_PROXY,
-    }
-    
-    # Verify Proxy
-    try:
-        print("--- PROXY DIAGNOSTICS ---")
-        with httpx.Client(proxy=LLM_PROXY, timeout=10) as client:
-            resp = client.get("https://ipinfo.io/json")
-            data = resp.json()
-            print(f"   IP: {data.get('ip')}")
-            print(f"   Country: {data.get('country')} ({data.get('city')})")
-        print("-------------------------")
-    except Exception as e:
-        print(f"WARNING: Proxy verification failed: {e}")
+    # Configure genai to use proxy implicitly via env vars (it respects them)
+    os.environ["HTTP_PROXY"] = LLM_PROXY
+    os.environ["HTTPS_PROXY"] = LLM_PROXY
 else:
     print("WARNING: No proxy configured!")
 
@@ -41,6 +29,7 @@ else:
 class Message(BaseModel):
     role: str
     content: str
+    files: Optional[List[str]] = None # Local paths to files
 
 class ChatCompletionRequest(BaseModel):
     model: str = "gemini-2.0-flash"
@@ -49,9 +38,45 @@ class ChatCompletionRequest(BaseModel):
     api_key: Optional[str] = None
 
 
-def convert_messages_to_gemini_format(messages: List[Message]) -> dict:
+def upload_file_to_gemini(file_path: str, api_key: str):
     """
-    Конвертирует сообщения в формат Gemini API.
+    Uploads a file to Gemini using the SDK.
+    Returns the file URI and mime_type.
+    """
+    try:
+        genai.configure(api_key=api_key)
+        
+        # Check if file exists
+        if not os.path.exists(file_path):
+            print(f"File not found: {file_path}")
+            return None
+
+        # Determine mime type (basic)
+        mime_type = "application/octet-stream"
+        ext = file_path.split('.')[-1].lower()
+        if ext in ['jpg', 'jpeg']: mime_type = "image/jpeg"
+        elif ext == 'png': mime_type = "image/png"
+        elif ext in ['ogg', 'oga']: mime_type = "audio/ogg"
+        elif ext == 'mp3': mime_type = "audio/mp3"
+        elif ext == 'wav': mime_type = "audio/wav"
+
+        print(f"Uploading file: {file_path} ({mime_type})")
+        
+        # Upload
+        # Note: genai.upload_file handles large files automatically
+        myfile = genai.upload_file(file_path, mime_type=mime_type)
+        
+        print(f"Uploaded: {myfile.name} -> {myfile.uri}")
+        return {"file_uri": myfile.uri, "mime_type": myfile.mime_type}
+
+    except Exception as e:
+        print(f"Upload failed: {e}")
+        return None
+
+
+def convert_messages_to_gemini_format(messages: List[Message], api_key: str) -> dict:
+    """
+    Конвертирует сообщения в формат Gemini API, загружая файлы.
     """
     contents = []
     system_instruction = None
@@ -59,11 +84,31 @@ def convert_messages_to_gemini_format(messages: List[Message]) -> dict:
     for msg in messages:
         if msg.role == "system":
             system_instruction = msg.content
+            
         elif msg.role == "user":
+            parts = []
+            
+            # 1. Add Text
+            if msg.content:
+                parts.append({"text": msg.content})
+            
+            # 2. Upload and Add Files
+            if msg.files:
+                for file_path in msg.files:
+                    file_data = upload_file_to_gemini(file_path, api_key)
+                    if file_data:
+                        parts.append({
+                            "file_data": {
+                                "file_uri": file_data["file_uri"],
+                                "mime_type": file_data["mime_type"]
+                            }
+                        })
+            
             contents.append({
                 "role": "user",
-                "parts": [{"text": msg.content}]
+                "parts": parts
             })
+            
         elif msg.role in ("assistant", "model"):
             contents.append({
                 "role": "model", 
@@ -96,8 +141,10 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
         model_name = request_body.model
         url = f"{GEMINI_API_URL}/{model_name}:generateContent?key={api_key}"
         
-        # Convert messages
-        payload = convert_messages_to_gemini_format(request_body.messages)
+        # Convert messages (Sync upload for now to keep logic simple)
+        # In production this should be async, but SDK is sync.
+        payload = convert_messages_to_gemini_format(request_body.messages, api_key)
+        
         payload["generationConfig"] = {
             "temperature": request_body.temperature
         }
@@ -105,7 +152,7 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
         print(f"Calling Gemini API: model={model_name}")
         
         # Make request with explicit proxy
-        async with httpx.AsyncClient(proxy=LLM_PROXY, timeout=60.0) as client:
+        async with httpx.AsyncClient(proxy=LLM_PROXY, timeout=120.0) as client:
             response = await client.post(url, json=payload)
             
             if response.status_code != 200:
@@ -118,7 +165,9 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
         # Extract response text
         candidates = data.get("candidates", [])
         if not candidates:
-            raise HTTPException(status_code=500, detail="No response from Gemini")
+            # Handle empty response (e.g., blocked content)
+            print(f"Empty candidates: {data}")
+            raise HTTPException(status_code=500, detail="No response from Gemini (Safety?)")
         
         content = candidates[0].get("content", {})
         parts = content.get("parts", [])
@@ -140,6 +189,8 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
         raise
     except Exception as e:
         print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

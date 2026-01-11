@@ -54,24 +54,62 @@ async def command_start_handler(message: Message):
 
 @dp.message()
 async def message_handler(message: Message):
-    logger.info(f"Received message from {message.from_user.id}: {message.text}")
+    logger.info(f"Received message from {message.from_user.id}")
 
     # Security check
     if not is_chat_allowed(message.chat.id, message.from_user.id):
         return
 
-    if not message.text:
-        return
-
-    # Create event for Mishka Brain
+    # Create base event
     event = {
         "user_id": message.from_user.id,
         "chat_id": message.chat.id,
         "username": message.from_user.username,
-        "text": message.text,
         "date": message.date.isoformat(),
-        "type": "text_message"
+        "type": "text_message",
+        "text": message.text or message.caption or ""
     }
+
+    # Handle Photo
+    if message.photo:
+        # Get the largest photo
+        photo = message.photo[-1]
+        file_id = photo.file_id
+        file_info = await bot.get_file(file_id)
+        
+        # Determine path in shared volume
+        file_ext = file_info.file_path.split('.')[-1]
+        local_filename = f"{file_info.file_unique_id}.{file_ext}"
+        local_path = f"/media/{local_filename}"
+        
+        # Download file
+        await bot.download_file(file_info.file_path, local_path)
+        logger.info(f"Downloaded photo to {local_path}")
+        
+        event["type"] = "image_message"
+        event["file_path"] = local_path
+        event["mime_type"] = "image/jpeg" # Telegram photos are usually JPEGs
+
+    # Handle Voice
+    elif message.voice:
+        voice = message.voice
+        file_id = voice.file_id
+        file_info = await bot.get_file(file_id)
+        
+        file_ext = file_info.file_path.split('.')[-1]
+        local_filename = f"{file_info.file_unique_id}.{file_ext}"
+        local_path = f"/media/{local_filename}"
+        
+        await bot.download_file(file_info.file_path, local_path)
+        logger.info(f"Downloaded voice to {local_path}")
+        
+        event["type"] = "voice_message"
+        event["file_path"] = local_path
+        event["mime_type"] = voice.mime_type or "audio/ogg"
+
+    # Skip if no text and no supported media
+    elif not message.text:
+         return
     
     # Publish to RabbitMQ
     try:
