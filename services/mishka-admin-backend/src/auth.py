@@ -39,10 +39,8 @@ def verify_telegram_auth(init_data: str) -> int:
     """
     # DEV_MODE Bypass
     if settings.DEV_MODE and init_data == "dev":
-        # Return first superadmin ID or a default dummy ID
-        if settings.superadmin_ids_list:
-            return settings.superadmin_ids_list[0]
-        return 123456789 # Fallback dummy ID
+        # Return configured superadmin ID or fallback
+        return settings.SUPERADMIN_ID or 123456789
 
     try:
         # aiogram 3.x utility
@@ -58,16 +56,28 @@ def verify_telegram_auth(init_data: str) -> int:
             if not user_json:
                 raise ValueError("No user data in initData")
             
+            # Debug
+            print(f"Auth check: init_data={init_data}")
+            # check_webapp_signature does the rest
+            
             user_data = json.loads(user_json)
             return user_data.get('id')
         else:
+            print(f"Signature mismatch. Token={settings.TELEGRAM_BOT_TOKEN[:5]}...")
             raise ValueError("Invalid signature")
     except Exception as e:
+        print(f"Auth Exception: {e}")
         raise ValueError(f"Auth verification failed: {e}")
 
-def get_user_role(user_id: int) -> str:
-    if user_id in settings.superadmin_ids_list:
-        return "admin"
+from enum import Enum
+
+class UserRole(str, Enum):
+    SUPERADMIN = "superadmin"
+    VIEWER = "viewer"
+
+def get_user_role(user_id: int) -> Optional[str]:
+    if user_id == settings.SUPERADMIN_ID:
+        return UserRole.SUPERADMIN
     if user_id in settings.viewer_ids_list:
-        return "viewer"
+        return UserRole.VIEWER
     return None

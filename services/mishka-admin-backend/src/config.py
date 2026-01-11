@@ -13,14 +13,17 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str # Using same env name as Gateway for consistency
     DEV_MODE: bool = False # Bypass signature check for local testing
     
-    # Access Control (strings of comma-separated IDs)
-    SUPERADMIN_IDS: str = "" # e.g. "123456,789012"
-    VIEWER_IDS: str = "" # e.g. "111222"
+    # Access Control
+    SUPERADMIN_ID: int = 0
+    VIEWER_IDS: str = "" # e.g. "111222,333444"
 
     @property
-    def superadmin_ids_list(self) -> List[int]:
-        if not self.SUPERADMIN_IDS: return []
-        return [int(x.strip()) for x in self.SUPERADMIN_IDS.split(",") if x.strip()]
+    def viewer_ids_list(self) -> List[int]:
+        if not self.VIEWER_IDS: return []
+        try:
+            return [int(x.strip()) for x in self.VIEWER_IDS.split(",") if x.strip()]
+        except ValueError:
+            return []
 
     @property
     def viewer_ids_list(self) -> List[int]:

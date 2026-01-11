@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 
 interface Stats {
     user_requesting: number;
+    role: string;
     cpu_load: string;
     memory_usage: string;
     active_chats: number;
+    facts_in_memory: number;
 }
 
 export default function Dashboard() {
@@ -14,23 +16,31 @@ export default function Dashboard() {
     const [error, setError] = useState('');
     const navigate = useNavigate();
 
+    const [tools, setTools] = useState<any[]>([]);
+
     useEffect(() => {
-        const fetchStats = async () => {
+        const fetchData = async () => {
             try {
                 const token = localStorage.getItem('token');
-                const res = await axios.get('/api/stats', {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                setStats(res.data);
+                const headers = { Authorization: `Bearer ${token}` };
+
+                // Parallel fetch
+                const [statsRes, toolsRes] = await Promise.all([
+                    axios.get('/api/dashboard/stats', { headers }),
+                    axios.get('/api/tools', { headers })
+                ]);
+
+                setStats(statsRes.data);
+                setTools(toolsRes.data);
             } catch (err: any) {
                 if (err.response?.status === 401) {
                     localStorage.removeItem('token');
                     navigate('/login');
                 }
-                setError('Failed to fetch stats');
+                setError('Failed to fetch data');
             }
         };
-        fetchStats();
+        fetchData();
     }, [navigate]);
 
     const logout = () => {
@@ -38,24 +48,75 @@ export default function Dashboard() {
         navigate('/login');
     }
 
+    const isSuperadmin = stats?.role === 'superadmin';
+
     return (
-        <div className="p-4 space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-xl font-bold">Dashboard</h1>
-                <button onClick={logout} className="text-sm text-red-500">Logout</button>
+        <div className="p-4 space-y-6 max-w-4xl mx-auto">
+            <div className="flex justify-between items-center border-b pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold">Mishka Dashboard</h1>
+                    {stats && (
+                        <span className={`text-xs px-2 py-1 rounded ${isSuperadmin ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
+                            {stats.role}
+                        </span>
+                    )}
+                </div>
+                <button onClick={logout} className="text-sm text-gray-500 hover:text-red-500">Logout</button>
             </div>
 
-            {error && <p className="text-red-500">{error}</p>}
+            {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
 
             {!stats ? (
-                <p>Loading...</p>
+                <div className="text-center py-10 text-gray-500">Loading...</div>
             ) : (
-                <div className="grid grid-cols-2 gap-4">
-                    <Card title="Active Chats" value={stats.active_chats} />
-                    <Card title="CPU Load" value={stats.cpu_load} />
-                    <Card title="RAM Usage" value={stats.memory_usage} />
-                    <div className="col-span-2 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg">
-                        <p className="text-xs text-gray-500">Logged in as ID: {stats.user_requesting}</p>
+                <div className="space-y-8">
+                    {/* Stats Grid */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-3">Statistics</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <Card title="Active Chats" value={stats.active_chats} />
+                            <Card title="CPU Load" value={stats.cpu_load} />
+                            <Card title="RAM Usage" value={stats.memory_usage} />
+                            <Card title="Facts Stored" value={stats.facts_in_memory} />
+                        </div>
+                    </section>
+
+                    {/* Tools List */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-3 flex items-center justify-between">
+                            Connected Tools
+                            <span className="text-xs font-normal text-gray-500">{tools.length} available</span>
+                        </h2>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {tools.map((tool: any, idx) => (
+                                <div key={idx} className="bg-white p-4 rounded-lg shadow border border-gray-200">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="font-bold text-lg">{tool.name}</h3>
+                                        <span className="text-xs bg-gray-100 px-2 py-1 rounded">{tool.endpoint.split(':')[2]?.split('/')[0] || 'Unknown Port'}</span>
+                                    </div>
+                                    <p className="text-sm text-gray-600 mb-4 h-10 line-clamp-2">{tool.description}</p>
+
+                                    {/* Config Preview */}
+                                    <div className="bg-gray-900 text-green-400 p-2 rounded text-xs font-mono overflow-x-auto mb-3">
+                                        {JSON.stringify(tool.parameters, null, 2)}
+                                    </div>
+
+                                    {isSuperadmin ? (
+                                        <button className="w-full bg-blue-600 text-white py-1 rounded hover:bg-blue-700 text-sm">
+                                            Edit Configuration
+                                        </button>
+                                    ) : (
+                                        <div className="text-center text-xs text-gray-400 italic">
+                                            Read-only access
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+
+                    <div className="text-xs text-gray-400 text-center mt-10">
+                        User ID: {stats.user_requesting}
                     </div>
                 </div>
             )}
