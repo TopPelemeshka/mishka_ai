@@ -1,0 +1,15 @@
+{
+  "name": "get_weather",
+  "description": "Узнать текущую погоду в указанном городе.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "city": {
+        "type": "string",
+        "description": "Название города (например, Москва, Токио)"
+      }
+    },
+    "required": ["city"]
+  },
+  "endpoint": "http://tool-weather:8000/weather"
+}

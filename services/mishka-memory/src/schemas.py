@@ -17,7 +17,7 @@ class UserResponse(UserBase):
         from_attributes = True
 
 class HistoryMessage(BaseModel):
-    role: str # "user" or "assistant"
+    role: str # "user", "assistant", or "tool"
     content: str
     timestamp: Optional[str] = None
 

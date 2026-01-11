@@ -28,3 +28,14 @@ async def get_context(chat_id: int) -> dict:
         except Exception as e:
             logger.error(f"Failed to get context from memory: {e}")
             return {"history": [], "user": None}
+
+async def list_tools() -> list:
+    """Fetch available tools from Memory Service."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(f"{MEMORY_SERVICE_URL}/tools/config")
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            logger.error(f"Failed to list tools: {e}")
+            return []

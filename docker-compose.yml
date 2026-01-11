@@ -7,6 +7,7 @@ services:
     env_file: .env
     volumes:
       - ./services/mishka-brain:/app
+      - ./logs:/app/logs
     environment:
       - LLM_PROVIDER_URL=${LLM_PROVIDER_URL:-http://mishka-llm-provider:8000/v1/chat/completions}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -70,6 +71,14 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_started
+
+  tool-weather:
+    build: ./tools/weather
+    container_name: tool-weather
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./tools/weather:/app
 
   # Tools
   tool-browser:

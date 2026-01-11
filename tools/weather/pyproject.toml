@@ -1,0 +1,17 @@
+[project]
+name = "tool-weather"
+version = "0.1.0"
+description = "Weather Tool for Mishka AI"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "pydantic"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio"
+]

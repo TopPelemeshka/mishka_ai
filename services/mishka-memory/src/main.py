@@ -67,3 +67,24 @@ async def get_context(chat_id: int, user_id: int = None, db: AsyncSession = Depe
         user=user_data,
         history=history
     )
+
+@app.get("/tools/config")
+async def get_tools_config():
+    """Return available tools manifests."""
+    return [
+        {
+            "name": "get_weather",
+            "description": "Узнать текущую погоду в указанном городе.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "Название города (например, Москва, Токио)"
+                    }
+                },
+                "required": ["city"]
+            },
+            "endpoint": "http://tool-weather:8000/weather"
+        }
+    ]
