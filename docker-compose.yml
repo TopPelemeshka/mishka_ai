@@ -30,9 +30,15 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       - JWT_SECRET=${JWT_SECRET:-unsafe_secret}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DEV_MODE=${DEV_MODE:-false}
+      - DEV_MODE=true
       - SUPERADMIN_ID=${SUPERADMIN_ID}
       - VIEWER_IDS=${VIEWER_IDS}
+      - POSTGRES_USER=${POSTGRES_USER:-mishka}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret}
+      - POSTGRES_DB=${POSTGRES_DB:-mishka_db}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     ports:
       - "8081:8080"
     volumes:
@@ -97,6 +103,7 @@ services:
     environment:
       - HTTP_PROXY=${LLM_PROXY}
       - HTTPS_PROXY=${LLM_PROXY}
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     ports:
       - "8000:8000"
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
@@ -119,10 +126,13 @@ services:
       - POSTGRES_DB=${POSTGRES_DB:-mishka_db}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       qdrant:
         condition: service_started

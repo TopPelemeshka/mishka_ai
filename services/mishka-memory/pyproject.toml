@@ -13,7 +13,8 @@ dependencies = [
     "pydantic-settings",
     "python-dotenv",
     "loguru",
-    "qdrant-client"
+    "qdrant-client",
+    "aio-pika"
 ]
 
 [project.optional-dependencies]

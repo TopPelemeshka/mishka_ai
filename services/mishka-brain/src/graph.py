@@ -21,7 +21,9 @@ SYSTEM_PROMPT_BASE = "Ты дружелюбный бот Мишка. Отвеч�
 async def retrieve_facts(query: str):
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(MEMORY_API_URL, json={"query": query, "limit": 3}, timeout=5.0)
+            from src.config_manager import config_manager
+            limit = int(config_manager.get("rag_fact_limit", 3))
+            resp = await client.post(MEMORY_API_URL, json={"query": query, "limit": limit}, timeout=5.0)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("results", [])
@@ -128,7 +130,11 @@ async def agent_node(state: AgentState):
     except Exception as e:
         logger.error(f"RAG Error: {e}")
 
-    system_prompt = f"Current Time: {current_time_str}\n" + SYSTEM_PROMPT_BASE + relevant_facts + tools_desc
+    # CONFIG: System Prompt
+    from src.config_manager import config_manager
+    base_prompt = config_manager.get("system_prompt", SYSTEM_PROMPT_BASE)
+
+    system_prompt = f"Current Time: {current_time_str}\n" + base_prompt + relevant_facts + tools_desc
 
     formatted_messages = [{"role": "system", "content": system_prompt}]
     formatted_messages.extend(formatted_history)
@@ -142,9 +148,16 @@ async def agent_node(state: AgentState):
             last_msg["files"] = files
             logger.info(f"Attaching files to payload: {files}")
 
+    # CONFIG: Temperature
+    try:
+        temp = float(config_manager.get("temperature", 0.7))
+    except:
+        temp = 0.7
+
     payload = {
-        "model": os.getenv("LLM_MODEL", "gemini-pro"),
-        "messages": formatted_messages
+        "model": config_manager.get("llm_model", os.getenv("LLM_MODEL", "gemini-pro")),
+        "messages": formatted_messages,
+        "temperature": temp
     }
     
     # LOGGING: Full prompt
@@ -189,8 +202,12 @@ async def tool_node(state: AgentState):
         logger.info(f"=== EXECUTING TOOL: {tool_name} ===\nArgs: {json.dumps(args, ensure_ascii=False)}\n===============================")
         
         logger.info(f"Calling tool {tool_name} at {tool_config['endpoint']}")
+        # Dynamic Tool Timeout
+        from src.config_manager import config_manager
+        tool_to = float(config_manager.get("tool_timeout", 20.0))
+        
         async with httpx.AsyncClient() as client:
-            resp = await client.post(tool_config["endpoint"], json=args, timeout=20.0)
+            resp = await client.post(tool_config["endpoint"], json=args, timeout=tool_to)
             resp.raise_for_status()
             result = resp.json()
             

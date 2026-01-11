@@ -26,7 +26,15 @@ class RedisManager:
         
         async with self.redis.pipeline() as pipe:
             pipe.rpush(key, message)
-            pipe.ltrim(key, -50, -1) # Keep last 50
+            
+            # Dynamic Limit
+            from src.config_manager import config_manager
+            try:
+                limit = int(config_manager.get("context_limit", 50))
+            except:
+                limit = 50
+                
+            pipe.ltrim(key, -limit, -1) 
             await pipe.execute()
 
     async def get_history(self, chat_id: int):

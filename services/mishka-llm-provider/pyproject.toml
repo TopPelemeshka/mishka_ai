@@ -8,7 +8,9 @@ dependencies = [
     "uvicorn",
     "python-dotenv",
     "httpx",
-    "google-generativeai"
+    "google-generativeai",
+    "aio-pika",
+    "loguru"
 ]
 
 [project.optional-dependencies]

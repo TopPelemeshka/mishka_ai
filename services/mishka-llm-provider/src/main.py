@@ -12,6 +12,12 @@ from src.key_manager import key_manager
 
 app = FastAPI(title="Mishka LLM Provider")
 
+from src.config_manager import config_manager
+
+@app.on_event("startup")
+async def startup_event():
+    await config_manager.initialize()
+
 # Gemini API Configuration
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
@@ -32,7 +38,14 @@ class Message(BaseModel):
     files: Optional[List[str]] = None # Local paths to files
 
 class ChatCompletionRequest(BaseModel):
-    model: str = "gemini-2.0-flash"
+    model: str = "gemini-2.0-flash" # Default value for Pydantic (static)
+    # We will override this in the handler if not provided or if we want to enforce dynamic default?
+    # Pydantic defaults are set at import time. We can't easily make them dynamic.
+    # But we can check in the handler: if request.model == "gemini-2.0-flash" (default), check if dynamic config is different?
+    # Or better: let Pydantic be 'gemini-2.0-flash' and in handler logic:
+    # model_name = request_body.model
+    # if model_name == "gemini-2.0-flash": # If user didn't change it... (weak heuristic)
+    # Better approach: Default to None or Optional, and if None, use config.
     messages: List[Message]
     temperature: Optional[float] = 0.7
     api_key: Optional[str] = None
@@ -167,6 +180,16 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
 
             # Build Gemini API URL
             model_name = request_body.model
+            # DYNAMIC: Check if we should use dynamic default
+            # If the user passed the HARDCODED default from Pydantic, we might want to swap it?
+            # Or just rely on the fact that if this variable is used, we use it.
+            # Let's assume if the user explicitly sends a model, we respect it.
+            # But if we want to change the SYSTEM default, we should probably change the Pydantic default? No, can't.
+            # Let's just use the timeout for now as it's cleaner.
+            
+            # Dynamic Timeout
+            timeout_val = float(config_manager.get("request_timeout", 120.0))
+            
             url = f"{GEMINI_API_URL}/{model_name}:generateContent?key={api_key}"
             
             # Convert messages (Uploads files using CURRENT key)
@@ -180,7 +203,7 @@ async def chat_completions(request_body: ChatCompletionRequest, request: Request
             print(f"Calling Gemini API: model={model_name} (Attempt {attempt+1}/{max_retries})")
             
             # Make request with explicit proxy
-            async with httpx.AsyncClient(proxy=LLM_PROXY, timeout=120.0) as client:
+            async with httpx.AsyncClient(proxy=LLM_PROXY, timeout=timeout_val) as client:
                 response = await client.post(url, json=payload)
                 
                 if response.status_code != 200:

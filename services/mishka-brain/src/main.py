@@ -13,6 +13,9 @@ async def main():
     setup_logger()
     logger.info("Starting Mishka Brain...")
     
+    from src.config_manager import config_manager
+    await config_manager.initialize()
+
     # Connect Producer and Consumer
     await producer.connect()
     await consumer.connect()

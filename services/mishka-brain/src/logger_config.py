@@ -6,15 +6,19 @@ def setup_logger():
     logger.remove()
     
     # Add console handler
-    logger.add(sys.stderr, level="INFO")
-    
-    # Add file handler (truncate mode 'w' to clear on restart)
-    logger.add(
-        "logs/interactions.log",
-        rotation="10 MB",
-        level="DEBUG",
-        mode="w", 
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}"
+    logger.configure(
+        handlers=[
+            {
+                "sink": "logs/interactions.log", 
+                "rotation": "10 MB", 
+                "compression": "zip", 
+                "level": "INFO", 
+                "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {message}",
+                "mode": "a" # Append mode
+            },
+            # Add stdout for docker logs visibility if needed
+            {"sink": sys.stderr, "level": "INFO"} 
+        ]
     )
     
     logger.info("Detailed file logging initialized.")

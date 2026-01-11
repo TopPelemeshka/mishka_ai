@@ -28,6 +28,8 @@ app = FastAPI()
 async def startup():
     await init_db()
     await redis_manager.connect()
+    from src.config_manager import config_manager
+    await config_manager.initialize()
 
 @app.on_event("shutdown")
 async def shutdown():

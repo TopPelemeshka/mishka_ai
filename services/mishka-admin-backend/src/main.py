@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
-from typing import Annotated
+from typing import Annotated, Optional
+from pydantic import BaseModel
 
 from src.config import settings
 from src.auth import (
@@ -116,20 +117,97 @@ async def update_tool_config(name: str, config: dict, admin: Annotated[dict, Dep
     # Mock update
     return {"status": "updated", "tool": name}
 
-@app.get("/logs")
-async def get_logs(admin: Annotated[dict, Depends(require_superadmin)]):
-    from fastapi.responses import StreamingResponse
-    LOG_FILE = "/app/logs/interactions.log"
-    
-    def log_generator():
-        try:
-            with open(LOG_FILE, "r", encoding="utf-8") as f:
-                # Basic tail implementation
-                # f.seek(0, 2) # Start from end? No, maybe full logs for now. 
-                # Prompts implies just "Stream logs"
-                for line in f:
-                    yield line
-        except FileNotFoundError:
-            yield "Log file not found."
+@app.on_event("startup")
+async def startup():
+    from src.database import init_db
+    from src.events import producer
+    await init_db()
+    await producer.connect()
 
-    return StreamingResponse(log_generator(), media_type="text/plain")
+@app.on_event("shutdown")
+async def shutdown():
+    from src.events import producer
+    await producer.close()
+
+# --- Configuration Routes ---
+from src.database import get_db
+from src.models import DynamicConfig
+from src.events import producer
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
+
+class ConfigUpdate(BaseModel):
+    service: str
+    key: str
+    value: str
+    description: Optional[str] = None
+    type: str = "string"
+
+@app.get("/admin/configs")
+async def get_all_configs(current_user: Annotated[dict, Depends(get_current_user)], db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DynamicConfig))
+    configs = result.scalars().all()
+    
+    # Group by service
+    grouped = {}
+    for c in configs:
+        if c.service not in grouped:
+            grouped[c.service] = []
+        grouped[c.service].append({
+            "key": c.key,
+            "value": c.value, 
+            "description": c.description,
+            "type": c.type
+        })
+        
+    if current_user["role"] == "viewer":
+        # Sanitize values if needed? Assume viewers can see configs for now, unless sensitive.
+        pass
+        
+    return grouped
+
+@app.post("/admin/configs")
+async def update_config(
+    idx: ConfigUpdate, 
+    admin: Annotated[dict, Depends(require_superadmin)], 
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if exists
+    result = await db.execute(
+        select(DynamicConfig).where(
+            DynamicConfig.service == idx.service, 
+            DynamicConfig.key == idx.key
+        )
+    )
+    existing = result.scalars().first()
+    
+    if existing:
+        existing.value = idx.value
+        if idx.description: existing.description = idx.description
+        if idx.type: existing.type = idx.type
+    else:
+        new_config = DynamicConfig(
+            service=idx.service, 
+            key=idx.key, 
+            value=idx.value,
+            description=idx.description,
+            type=idx.type
+        )
+        db.add(new_config)
+        
+    await db.commit()
+    
+    # Publish Event
+    await producer.publish_update(idx.service, idx.key, idx.value)
+    
+    return {"status": "updated", "key": f"{idx.service}.{idx.key}"}
+
+@app.get("/internal/configs/{service_name}")
+async def get_service_config(service_name: str, db: AsyncSession = Depends(get_db)):
+    """Internal endpoint for services to fetch their config on startup"""
+    # No auth for internal network (or use shared secret if paranoid, generally internal network is trusted in Docker Compose)
+    result = await db.execute(select(DynamicConfig).where(DynamicConfig.service == service_name))
+    configs = result.scalars().all()
+    
+    return {c.key: c.value for c in configs}
+
