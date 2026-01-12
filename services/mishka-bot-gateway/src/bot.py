@@ -19,30 +19,23 @@ dp = Dispatcher()
 
 # Security: Allowed Group ID
 ALLOWED_GROUP_ID = os.getenv("ALLOWED_GROUP_ID")
-if ALLOWED_GROUP_ID:
-    try:
-        ALLOWED_GROUP_ID = int(ALLOWED_GROUP_ID)
-        logger.info(f"Bot restricted to chat_id: {ALLOWED_GROUP_ID}")
-    except ValueError:
-        logger.error(f"Invalid ALLOWED_GROUP_ID format: {ALLOWED_GROUP_ID}")
-        ALLOWED_GROUP_ID = None
-else:
-    logger.warning("ALLOWED_GROUP_ID not set - bot will not respond to any messages!")
+if not ALLOWED_GROUP_ID:
+    logger.critical("ALLOWED_GROUP_ID is missing in environment variables! Security violation.")
+    raise ValueError("ALLOWED_GROUP_ID is REQUIRED. The bot will not start without a defined allowed group.")
+
+try:
+    ALLOWED_GROUP_ID = int(ALLOWED_GROUP_ID)
+    logger.info(f"Bot restricted to chat_id: {ALLOWED_GROUP_ID}")
+except ValueError:
+    logger.critical(f"Invalid ALLOWED_GROUP_ID format: {ALLOWED_GROUP_ID}")
+    raise ValueError("ALLOWED_GROUP_ID must be an integer.")
 
 
 def is_chat_allowed(chat_id: int, user_id: int) -> bool:
     """
     Проверяет, разрешен ли чат для работы бота.
     """
-    if not ALLOWED_GROUP_ID:
-        logger.warning(f"Unauthorized access attempt from chat_id: {chat_id} (User: {user_id}) - ALLOWED_GROUP_ID not configured")
-        return False
-    
-    if chat_id != ALLOWED_GROUP_ID:
-        logger.warning(f"Unauthorized access attempt from chat_id: {chat_id} (User: {user_id})")
-        return False
-    
-    return True
+    return chat_id == ALLOWED_GROUP_ID
 
 
 @dp.message(CommandStart())
