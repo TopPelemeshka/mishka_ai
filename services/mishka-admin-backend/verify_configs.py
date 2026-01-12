@@ -35,30 +35,35 @@ async def verify():
              return
 
         # 2. Post Config
-        # Test Initiative
+        print("Resetting threshold to 70...")
         await client.post(f"{BASE_URL}/admin/configs", json={
             "service": "mishka-initiative",
-            "key": "llm_model",
-            "value": "gemini-1.5-flash",
-            "type": "string"
-        }, headers=headers)
-
-        # Test Brain
-        resp = await client.post(f"{BASE_URL}/admin/configs", json={
-            "service": "mishka-brain",
-            "key": "rag_fact_limit",
-            "value": "5",
+            "key": "threshold",
+            "value": "70",
             "type": "int"
         }, headers=headers)
         
-        # Test LLM Provider
-        resp = await client.post(f"{BASE_URL}/admin/configs", json={
-            "service": "mishka-llm-provider",
-            "key": "request_timeout",
-            "value": "60.0",
-            "type": "float"
+        print("Updating soft_rule_instructions...")
+        instructions = """
+        Criteria:
+        - Reply IMMEDIATELY (Score 100) if the user addresses you by Name or Alias (e.g. "Mishka, you here?", "Mishka help").
+        - Reply (Score 95+) if the message is a direct response to YOUR last message in the context.
+        - Reply (Score 80+) if the user asks a question relevant to you or general knowledge.
+        - Reply (Score 75+) if the user is venting/emotional and a supportive comment fits the persona.
+        - Ignore (Score < 50) short, irrelevant, or phatic expressions (e.g. "ok", "lol", "cool") unless they address you.
+        - Ignore (Score < 30) internal discussions between other people if they do not concern you.
+        """
+        await client.post(f"{BASE_URL}/admin/configs", json={
+            "service": "mishka-initiative",
+            "key": "soft_rule_instructions",
+            "value": instructions,
+            "type": "string"
         }, headers=headers)
-        print(f"Post Config: {resp.status_code} {resp.text}")
+        
+        # Get Configs
+        print("Getting current configs...")
+        resp = await client.get(f"{BASE_URL}/admin/configs", headers=headers)
+        print(f"Get Configs: {resp.json()}")
         
         # 3. Get Configs
         resp = await client.get(f"{BASE_URL}/admin/configs", headers=headers)
