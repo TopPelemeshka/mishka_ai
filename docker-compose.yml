@@ -11,7 +11,6 @@ services:
       - shared_media:/media
     environment:
       - LLM_PROVIDER_URL=${LLM_PROVIDER_URL:-http://mishka-llm-provider:8000/v1/chat/completions}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - LLM_MODEL=${LLM_MODEL:-gemini-pro}
     command: python src/main.py
     depends_on:
@@ -103,6 +102,7 @@ services:
     environment:
       - HTTP_PROXY=${LLM_PROXY}
       - HTTPS_PROXY=${LLM_PROXY}
+      - GOOGLE_API_KEYS=${GOOGLE_API_KEYS}
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     ports:
       - "8000:8000"

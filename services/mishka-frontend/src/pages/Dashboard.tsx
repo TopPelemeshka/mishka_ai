@@ -61,7 +61,17 @@ export default function Dashboard() {
                         </span>
                     )}
                 </div>
-                <button onClick={logout} className="text-sm text-gray-500 hover:text-red-500">Logout</button>
+                <div className="flex gap-4 items-center">
+                    {isSuperadmin && (
+                        <button
+                            onClick={() => navigate('/settings')}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1 rounded"
+                        >
+                            Config Settings
+                        </button>
+                    )}
+                    <button onClick={logout} className="text-sm text-gray-500 hover:text-red-500">Logout</button>
+                </div>
             </div>
 
             {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">{error}</div>}
