@@ -24,18 +24,50 @@ class ConfigManager:
 
     async def _fetch_initial_configs(self):
         admin_url = "http://mishka-admin-backend:8080"
-        try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{admin_url}/internal/configs/{self.service_name}", timeout=5.0)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    for item in data.get("configs", []):
-                        self._configs[item["key"]] = item["value"]
-                    logger.info(f"Loaded dynamic configs: {self._configs}")
-                else:
-                    logger.warning(f"Failed to fetch configs: {resp.status_code}")
-        except Exception as e:
-            logger.warning(f"Config fetch error: {e}")
+        
+        for attempt in range(5):
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"{admin_url}/internal/configs/{self.service_name}", timeout=5.0)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        # Handling different return format here (wrapper "configs" vs direct dict)
+                        # Previous implementation: data.get("configs", []) which implies list of k/v
+                        # But wait, other services assume dict?
+                        # Let's check main.py of admin backend:
+                        # return {c.key: c.value for c in configs} -> It returns a DICT.
+                        
+                        # Wait, LLM Provider code was:
+                        # data = resp.json()
+                        # for item in data.get("configs", []): ...
+                        
+                        # So LLM Provider EXPECTS a different format than what backend sends?
+                        # Backend sends: {"key": "value"}
+                        # LLM Provider expects: {"configs": [{"key": "k", "value": "v"}]} ?
+                        
+                        # Let's check Admin Backend logic again.
+                        # @app.get("/internal/configs/{service_name}") -> return {c.key: c.value for c in configs}
+                        # So it returns {"request_timeout": "120.0"} etc.
+                        
+                        # So LLM Provider code was WRONG or OLD.
+                        # Since it updates self._configs, let's fix it to match backend.
+                        
+                        # Oh wait, verify_configs.py logic?
+                        # No, let's just use .update(resp.json()) like others if format is dict.
+                        
+                        self._configs.update(data)
+                        logger.info(f"Loaded dynamic configs: {self._configs}")
+                        break
+                    else:
+                        logger.warning(f"Failed to fetch configs (Attempt {attempt+1}/5): {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Config fetch error (Attempt {attempt+1}/5): {e}")
+
+            # Wait before retry
+            wait_time = 2 * (2 ** attempt)
+            if attempt < 4:
+                logger.info(f"Retrying config fetch in {wait_time}s...")
+                await asyncio.sleep(wait_time)
 
     async def _listen_updates(self):
         rabbitmq_url = os.getenv("RABBITMQ_URL")

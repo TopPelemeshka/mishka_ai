@@ -14,6 +14,16 @@ app = FastAPI(title="Mishka Admin Backend")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:8082", "http://localhost:5173", "http://127.0.0.1:8082"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # --- Dependencies ---
 # --- Dependencies ---
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
@@ -210,4 +220,60 @@ async def get_service_config(service_name: str, db: AsyncSession = Depends(get_d
     configs = result.scalars().all()
     
     return {c.key: c.value for c in configs}
+# --- Personality Proxy Routes ---
 
+PERSONALITY_SERVICE_URL = "http://mishka-personality:8000"
+
+@app.get("/admin/personalities")
+async def get_personalities(current_user: Annotated[dict, Depends(get_current_user)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{PERSONALITY_SERVICE_URL}/personalities", timeout=5.0)
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+@app.post("/admin/personalities")
+async def create_personality(payload: dict, admin: Annotated[dict, Depends(require_superadmin)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{PERSONALITY_SERVICE_URL}/personalities", json=payload, timeout=5.0)
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+@app.post("/admin/personalities/{p_id}/activate")
+async def activate_personality(p_id: str, admin: Annotated[dict, Depends(require_superadmin)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{PERSONALITY_SERVICE_URL}/personalities/{p_id}/activate", timeout=5.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+@app.post("/admin/personalities/evolve")
+async def trigger_evolution(payload: dict, admin: Annotated[dict, Depends(require_superadmin)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(f"{PERSONALITY_SERVICE_URL}/evolve", json=payload)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+@app.post("/admin/personalities/reset")
+async def reset_personality(admin: Annotated[dict, Depends(require_superadmin)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+             resp = await client.post(f"{PERSONALITY_SERVICE_URL}/reset")
+             return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")

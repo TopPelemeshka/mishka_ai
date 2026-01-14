@@ -1,0 +1,15 @@
+[project]
+name = "mishka-personality"
+version = "0.1.0"
+description = "Personality Service for Mishka AI"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "sqlalchemy",
+    "psycopg2-binary",
+    "pydantic",
+    "httpx",
+    "python-dotenv",
+    "asyncpg" 
+]

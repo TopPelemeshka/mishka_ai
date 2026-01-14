@@ -131,10 +131,31 @@ async def agent_node(state: AgentState):
         logger.error(f"RAG Error: {e}")
 
     # CONFIG: System Prompt
-    from src.config_manager import config_manager
-    base_prompt = config_manager.get("system_prompt", SYSTEM_PROMPT_BASE)
+    # PERSONALITY: Fetch Dynamic System Prompt
+    global _cached_prompt, _last_prompt_fetch
+    
+    # Simple Caching Logic (60s)
+    import time
+    if '_cached_prompt' not in globals():
+        _cached_prompt = SYSTEM_PROMPT_BASE
+        _last_prompt_fetch = 0
+        
+    current_time = time.time()
+    if current_time - _last_prompt_fetch > 60:
+        PERSONALITY_API_URL = os.getenv("PERSONALITY_API_URL", "http://mishka-personality:8000/current")
+        async with httpx.AsyncClient() as client:
+            try:
+                p_resp = await client.get(PERSONALITY_API_URL, timeout=2.0)
+                if p_resp.status_code == 200:
+                    data = p_resp.json()
+                    _cached_prompt = data.get("text", SYSTEM_PROMPT_BASE)
+                    _last_prompt_fetch = current_time
+                else:
+                    logger.warning(f"Personality API returned {p_resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch personality: {e}")
 
-    system_prompt = f"Current Time: {current_time_str}\n" + base_prompt + relevant_facts + tools_desc
+    system_prompt = f"Current Time: {current_time_str}\n" + _cached_prompt + relevant_facts + tools_desc
 
     formatted_messages = [{"role": "system", "content": system_prompt}]
     formatted_messages.extend(formatted_history)

@@ -63,12 +63,20 @@ export default function Dashboard() {
                 </div>
                 <div className="flex gap-4 items-center">
                     {isSuperadmin && (
-                        <button
-                            onClick={() => navigate('/settings')}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1 rounded"
-                        >
-                            Config Settings
-                        </button>
+                        <>
+                            <button
+                                onClick={() => navigate('/settings')}
+                                className="text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1 rounded"
+                            >
+                                Config Settings
+                            </button>
+                            <button
+                                onClick={() => navigate('/personality')}
+                                className="text-sm font-medium text-purple-600 hover:text-purple-800 bg-purple-50 px-3 py-1 rounded"
+                            >
+                                Personality
+                            </button>
+                        </>
                     )}
                     <button onClick={logout} className="text-sm text-gray-500 hover:text-red-500">Logout</button>
                 </div>

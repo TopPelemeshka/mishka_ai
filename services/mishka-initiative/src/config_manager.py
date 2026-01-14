@@ -15,18 +15,28 @@ class ConfigManager:
 
     async def initialize(self):
         # 1. Load from Admin Backend
-        try:
-            admin_url = "http://mishka-admin-backend:8080/internal/configs/" + self.service_name
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(admin_url, timeout=5.0)
-                if resp.status_code == 200:
-                    remote = resp.json()
-                    self._configs.update(remote)
-                    logger.info(f"Loaded dynamic configs: {self._configs}")
-                else:
-                    logger.warning(f"Failed to fetch configs: {resp.status_code}")
-        except Exception as e:
-            logger.warning(f"Config fetch error: {e}")
+        # 1. Load from Admin Backend (with retries)
+        admin_url = "http://mishka-admin-backend:8080/internal/configs/" + self.service_name
+        
+        for attempt in range(5):
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(admin_url, timeout=5.0)
+                    if resp.status_code == 200:
+                        remote = resp.json()
+                        self._configs.update(remote)
+                        logger.info(f"Loaded dynamic configs: {self._configs}")
+                        break
+                    else:
+                        logger.warning(f"Failed to fetch configs (Attempt {attempt+1}/5): {resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Config fetch error (Attempt {attempt+1}/5): {e}")
+
+            # Wait before retry
+            wait_time = 2 * (2 ** attempt)
+            if attempt < 4:
+                logger.info(f"Retrying config fetch in {wait_time}s...")
+                await asyncio.sleep(wait_time)
 
         # 2. Start Listener Task
         asyncio.create_task(self._listen_updates())

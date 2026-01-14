@@ -171,6 +171,25 @@ services:
     depends_on:
       - mishka-memory
 
+  mishka-personality:
+    build: ./services/mishka-personality
+    container_name: mishka-personality
+    ports:
+      - "8007:8000"
+    volumes:
+      - ./services/mishka-personality:/app
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-mishka}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secret}
+      - POSTGRES_DB=${POSTGRES_DB:-mishka_db}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - ALLOWED_GROUP_ID=${ALLOWED_GROUP_ID}
+      - MEMORY_API_URL=http://mishka-memory:8000
+      - LLM_PROVIDER_URL=http://mishka-llm-provider:8000/v1/chat/completions
+    depends_on:
+      - postgres
+
   # Infra
   postgres:
     image: postgres:15-alpine

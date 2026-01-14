@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
+import PersonalityPage from './pages/Personality'
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -30,6 +31,14 @@ function App() {
                     element={
                         <ProtectedRoute>
                             <Settings />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/personality"
+                    element={
+                        <ProtectedRoute>
+                            <PersonalityPage />
                         </ProtectedRoute>
                     }
                 />
