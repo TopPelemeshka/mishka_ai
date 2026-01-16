@@ -187,6 +187,7 @@ services:
       - ALLOWED_GROUP_ID=${ALLOWED_GROUP_ID}
       - MEMORY_API_URL=http://mishka-memory:8000
       - LLM_PROVIDER_URL=http://mishka-llm-provider:8000/v1/chat/completions
+      - LLM_MODEL=${LLM_MODEL:-gemini-1.5-flash}
     depends_on:
       - postgres
 

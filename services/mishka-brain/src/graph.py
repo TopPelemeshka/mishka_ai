@@ -7,6 +7,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, System
 from loguru import logger
 
 from src.utils import get_context, list_tools
+from src.config_manager import config_manager
 
 class AgentState(TypedDict):
     messages: List[BaseMessage]

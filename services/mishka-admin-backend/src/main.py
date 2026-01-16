@@ -244,6 +244,18 @@ async def create_personality(payload: dict, admin: Annotated[dict, Depends(requi
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
 
+@app.put("/admin/personalities/{p_id}")
+async def update_personality(p_id: str, payload: dict, admin: Annotated[dict, Depends(require_superadmin)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.put(f"{PERSONALITY_SERVICE_URL}/personalities/{p_id}", json=payload, timeout=5.0)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
 @app.post("/admin/personalities/{p_id}/activate")
 async def activate_personality(p_id: str, admin: Annotated[dict, Depends(require_superadmin)]):
     import httpx
@@ -275,5 +287,29 @@ async def reset_personality(admin: Annotated[dict, Depends(require_superadmin)])
         async with httpx.AsyncClient() as client:
              resp = await client.post(f"{PERSONALITY_SERVICE_URL}/reset")
              return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+@app.get("/admin/personalities/{p_id}/history")
+async def get_personality_history(p_id: str, current_user: Annotated[dict, Depends(get_current_user)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{PERSONALITY_SERVICE_URL}/personalities/{p_id}/history")
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+@app.post("/admin/evolution/{p_id}/rollback")
+async def rollback_evolution(p_id: str, payload: dict, admin: Annotated[dict, Depends(require_superadmin)]):
+    import httpx
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(f"{PERSONALITY_SERVICE_URL}/evolution/{p_id}/rollback", json=payload)
+            if resp.status_code != 200:
+                raise HTTPException(status_code=resp.status_code, detail=resp.text)
+            return resp.json()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")

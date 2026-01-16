@@ -32,3 +32,6 @@ class CurrentPromptResponse(BaseModel):
 
 class EvolveRequest(BaseModel):
     reason: str = "Manual Evolution Trigger"
+
+class RollbackRequest(BaseModel):
+    target_log_id: UUID

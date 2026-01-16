@@ -53,6 +53,20 @@ async def create_personality(p: PersonalityCreate, db: AsyncSession = Depends(ge
     await db.refresh(new_p)
     return new_p
 
+@app.put("/personalities/{p_id}", response_model=PersonalityResponse)
+async def update_personality(p_id: uuid.UUID, p: PersonalityCreate, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Personality).where(Personality.id == p_id))
+    existing = result.scalars().first()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Personality not found")
+    
+    existing.name = p.name
+    existing.base_prompt = p.base_prompt
+    
+    await db.commit()
+    await db.refresh(existing)
+    return existing
+
 @app.post("/personalities/{p_id}/activate", response_model=PersonalityResponse)
 async def activate_personality(p_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
     # Deactivate all
@@ -147,7 +161,7 @@ async def evolve_personality(req: EvolveRequest, db: AsyncSession = Depends(get_
             llm_resp = await client.post(
                 LLM_PROVIDER_URL,
                 json={
-                    "model": "gemini-1.5-flash", # Use fast model for analysis
+                    "model": os.getenv("LLM_MODEL", "gemini-1.5-flash"), # Use configured model
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
@@ -180,6 +194,41 @@ async def evolve_personality(req: EvolveRequest, db: AsyncSession = Depends(get_
     await db.commit()
 
     return {"status": "Evolved", "traits": new_traits}
+
+@app.get("/personalities/{p_id}/history", response_model=List[EvolutionLogResponse])
+async def get_history(p_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(EvolutionLog)
+        .where(EvolutionLog.personality_id == p_id)
+        .order_by(EvolutionLog.created_at.desc())
+    )
+    return result.scalars().all()
+
+from src.schemas import RollbackRequest
+
+@app.post("/evolution/{p_id}/rollback", response_model=EvolutionLogResponse)
+async def rollback_evolution(p_id: uuid.UUID, req: RollbackRequest, db: AsyncSession = Depends(get_db)):
+    # 1. Fetch Target Log
+    result = await db.execute(select(EvolutionLog).where(EvolutionLog.id == req.target_log_id))
+    target_log = result.scalars().first()
+    if not target_log:
+        raise HTTPException(status_code=404, detail="Target log not found")
+    
+    if target_log.personality_id != p_id:
+        raise HTTPException(status_code=400, detail="Log belongs to another personality")
+
+    # 2. Create NEW log with OLD traits
+    # This preserves history while reverting state
+    new_log = EvolutionLog(
+        personality_id=p_id,
+        traits=target_log.traits,
+        reason=f"Rollback to {target_log.created_at.strftime('%Y-%m-%d %H:%M')}"
+    )
+    db.add(new_log)
+    await db.commit()
+    await db.refresh(new_log)
+    
+    return new_log
 
 @app.post("/reset")
 async def reset_personality(db: AsyncSession = Depends(get_db)):
