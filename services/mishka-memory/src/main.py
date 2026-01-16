@@ -71,9 +71,9 @@ async def add_history(chat_id: int, message: HistoryMessage):
     return {"status": "added"}
 
 @app.get("/context/{chat_id}", response_model=ContextResponse)
-async def get_context(chat_id: int, user_id: int = None, db: AsyncSession = Depends(get_db)):
-    # 1. Get History from Redis
-    history = await redis_manager.get_history(chat_id)
+async def get_context(chat_id: int, user_id: int = None, limit: int = 500, hours: int = 24, db: AsyncSession = Depends(get_db)):
+    # 1. Get History from Redis (Default: 24h, 500 limit)
+    history = await redis_manager.get_history(chat_id, limit=limit, hours=hours)
     
     # 2. Get User from Postgres (if user_id provided)
     user_data = None
@@ -85,6 +85,10 @@ async def get_context(chat_id: int, user_id: int = None, db: AsyncSession = Depe
         user=user_data,
         history=history
     )
+
+@app.get("/chats/active")
+async def get_active_chats():
+    return await redis_manager.get_active_chats()
 
 @app.get("/tools/config")
 async def get_tools_config():
@@ -176,3 +180,14 @@ async def search_facts(request: SearchRequest):
     # 2. Search Qdrant
     results = qdrant_manager.search_facts(embedding, limit=request.limit)
     return {"results": results}
+
+@app.get("/facts/all")
+async def get_all_facts(limit: int = 1000):
+    if not qdrant_manager: return []
+    return qdrant_manager.get_all_facts(limit=limit)
+
+@app.delete("/facts/{fact_id}")
+async def delete_fact(fact_id: str):
+    if not qdrant_manager: return {"status": "error"}
+    qdrant_manager.delete_fact(fact_id)
+    return {"status": "deleted"}

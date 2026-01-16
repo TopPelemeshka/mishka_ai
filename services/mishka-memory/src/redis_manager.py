@@ -37,9 +37,38 @@ class RedisManager:
             pipe.ltrim(key, -limit, -1) 
             await pipe.execute()
 
-    async def get_history(self, chat_id: int):
+    async def get_history(self, chat_id: int, limit: int = 50, hours: int = None):
         key = f"chat_history:{chat_id}"
-        messages = await self.redis.lrange(key, 0, -1)
-        return [json.loads(m) for m in messages]
+        # Start with larger range if hours is requested
+        read_limit = limit if not hours else 1000 
+        
+        messages = await self.redis.lrange(key, -read_limit, -1)
+        parsed = [json.loads(m) for m in messages]
+        
+        if hours:
+            import datetime
+            now = datetime.datetime.utcnow()
+            cutoff = now - datetime.timedelta(hours=hours)
+            
+            filtered = []
+            for msg in parsed:
+                ts_str = msg.get("created_at") or msg.get("timestamp")
+                if ts_str:
+                    try:
+                        ts = datetime.datetime.fromisoformat(ts_str)
+                        if ts > cutoff:
+                            filtered.append(msg)
+                    except:
+                        filtered.append(msg) # Keep if no valid date
+                else:
+                    filtered.append(msg)
+            parsed = filtered
+            
+        return parsed # Already limited by lrange mostly, filtered by date
+
+    async def get_active_chats(self):
+        """Returns list of chat_ids."""
+        keys = await self.redis.keys("chat_history:*")
+        return [int(k.split(":")[-1]) for k in keys]
 
 redis_manager = RedisManager()

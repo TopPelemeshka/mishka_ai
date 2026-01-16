@@ -137,6 +137,34 @@ services:
       qdrant:
         condition: service_started
 
+
+
+  mishka-archivist:
+    build: ./services/mishka-archivist
+    container_name: mishka-archivist
+    env_file: .env
+    environment:
+      - MEMORY_API_URL=http://mishka-memory:8000
+      - LLM_PROVIDER_URL=http://mishka-llm-provider:8000/v1/chat/completions
+      - LLM_MODEL=${LLM_MODEL:-gemini-1.5-flash}
+    volumes:
+      - ./services/mishka-archivist:/app
+    depends_on:
+      - mishka-memory
+
+  mishka-dreamer:
+    build: ./services/mishka-dreamer
+    container_name: mishka-dreamer
+    env_file: .env
+    environment:
+      - MEMORY_API_URL=http://mishka-memory:8000
+      - LLM_PROVIDER_URL=http://mishka-llm-provider:8000/v1/chat/completions
+      - LLM_MODEL=${LLM_MODEL:-gemini-1.5-flash}
+    volumes:
+      - ./services/mishka-dreamer:/app
+    depends_on:
+      - mishka-memory
+
   tool-weather:
     build: ./tools/weather
     container_name: tool-weather

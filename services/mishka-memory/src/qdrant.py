@@ -70,10 +70,39 @@ class QdrantManager:
             {
                 "score": hit.score,
                 "text": hit.payload.get("text"),
-                "metadata": hit.payload
+                "metadata": hit.payload,
+                "id": hit.id
             }
             for hit in results
         ]
+
+    def get_all_facts(self, limit: int = 1000) -> List[Dict]:
+        """Iterates over facts (Scroll)."""
+        # Scroll API
+        results, _ = self.client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=limit,
+            with_payload=True,
+            with_vectors=True # Needed for clustering
+        )
+        return [
+            {
+                "id": p.id,
+                "vector": p.vector,
+                "metadata": p.payload,
+                "text": p.payload.get("text")
+            }
+            for p in results
+        ]
+
+    def delete_fact(self, fact_id: str):
+        """Deletes a fact by ID."""
+        self.client.delete(
+            collection_name=COLLECTION_NAME,
+            points_selector=models.PointIdsList(
+                points=[fact_id]
+            )
+        )
 
 # Global instance
 try:

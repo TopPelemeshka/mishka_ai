@@ -1,0 +1,13 @@
+[project]
+name = "mishka-dreamer"
+version = "0.1.0"
+description = "Consolidates and cleanups memory"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx",
+    "apscheduler",
+    "loguru",
+    "pydantic",
+    "python-dotenv",
+    "numpy"
+]
