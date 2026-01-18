@@ -3,15 +3,14 @@ import sys
 from loguru import logger
 from src.consumer import consumer
 from src.producer import producer
-from src.logger_config import setup_logger
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
 
-# Configure Loguru
-logger.remove()
-logger.add(sys.stderr, level="INFO")
+# Configure Loguru (Run setup immediately)
+setup_logger()
 
 async def main():
-    setup_logger()
     logger.info("Starting Mishka Brain...")
+    await start_log_handler()
     
     from src.config_manager import config_manager
     await config_manager.initialize()
@@ -31,6 +30,7 @@ async def main():
         logger.info("Shutting down...")
         await consumer.close()
         await producer.close()
+        await stop_log_handler()
 
 if __name__ == "__main__":
     try:

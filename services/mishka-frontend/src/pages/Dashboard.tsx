@@ -76,6 +76,12 @@ export default function Dashboard() {
                             >
                                 Personality
                             </button>
+                            <button
+                                onClick={() => navigate('/monitoring')}
+                                className="text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 px-3 py-1 rounded"
+                            >
+                                Monitoring
+                            </button>
                         </>
                     )}
                     <button onClick={logout} className="text-sm text-gray-500 hover:text-red-500">Logout</button>

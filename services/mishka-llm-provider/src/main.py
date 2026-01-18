@@ -13,10 +13,18 @@ from src.key_manager import key_manager
 app = FastAPI(title="Mishka LLM Provider")
 
 from src.config_manager import config_manager
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
+
+setup_logger()
 
 @app.on_event("startup")
 async def startup_event():
+    await start_log_handler()
     await config_manager.initialize()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await stop_log_handler()
 
 # Gemini API Configuration
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"

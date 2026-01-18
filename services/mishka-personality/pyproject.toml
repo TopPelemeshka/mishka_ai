@@ -11,5 +11,7 @@ dependencies = [
     "pydantic",
     "httpx",
     "python-dotenv",
-    "asyncpg" 
+    "asyncpg",
+    "loguru",
+    "aio-pika"
 ]

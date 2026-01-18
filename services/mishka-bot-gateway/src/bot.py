@@ -107,10 +107,45 @@ async def message_handler(message: Message):
     # Publish to RabbitMQ
     try:
         logger.info(f"Sending to RabbitMQ: {event}")
+        await start_typing(message.chat.id)
         await rmq.publish("chat_events", event)
     except Exception as e:
         logger.error(f"Failed to publish message: {e}")
+        await stop_typing(message.chat.id) # Stop if failed
         await message.answer("Error processing message.")
+
+
+
+# Typing Status Management
+typing_tasks = {}
+
+async def keep_typing(chat_id: int):
+    """Sends typing action every 4 seconds."""
+    try:
+        # Auto-stop after 40 seconds to prevent zombie typing
+        for _ in range(10): 
+            await bot.send_chat_action(chat_id=chat_id, action="typing")
+            await asyncio.sleep(4)
+    except asyncio.CancelledError:
+        pass
+    except Exception as e:
+        logger.error(f"Typing status error: {e}")
+    finally:
+        if chat_id in typing_tasks:
+            del typing_tasks[chat_id]
+
+async def start_typing(chat_id: int):
+    if chat_id in typing_tasks:
+        return # Already typing
+    task = asyncio.create_task(keep_typing(chat_id))
+    typing_tasks[chat_id] = task
+
+async def stop_typing(chat_id: int):
+    task = typing_tasks.get(chat_id)
+    if task:
+        task.cancel()
+        if chat_id in typing_tasks:
+            del typing_tasks[chat_id]
 
 
 async def send_message_to_user(data: dict):
@@ -121,6 +156,10 @@ async def send_message_to_user(data: dict):
     chat_id = data.get("chat_id")
     text = data.get("text")
     
+    if chat_id:
+        # Stop typing when response arrives
+        await stop_typing(chat_id)
+        
     if chat_id and text:
         try:
             if bot:
@@ -128,3 +167,4 @@ async def send_message_to_user(data: dict):
                 logger.info(f"Sent message to {chat_id}: {text}")
         except Exception as e:
             logger.error(f"Failed to send message: {e}")
+

@@ -11,6 +11,16 @@ MEMORY_API_URL = os.getenv("MEMORY_API_URL", "http://mishka-memory:8000")
 LLM_PROVIDER_URL = os.getenv("LLM_PROVIDER_URL", "http://mishka-llm-provider:8000/v1/chat/completions")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-1.5-flash")
 
+from fastapi import FastAPI
+import uvicorn
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
+
+app = FastAPI(title="Mishka Archivist")
+scheduler = AsyncIOScheduler()
+
+# Initialize Logging
+setup_logger()
+
 async def extract_facts_from_chunk(chunk, user_id):
     """Sends chunk to LLM to extract facts."""
     dialog_text = "\n".join([f"{m['role']} ({m.get('created_at','')}): {m['content']}" for m in chunk])
@@ -76,18 +86,24 @@ async def run_archivist_job():
         # 1. Get Active Chats
         active_chats = []
         async with httpx.AsyncClient() as client:
-            resp = await client.get(f"{MEMORY_API_URL}/chats/active")
-            if resp.status_code == 200:
-                active_chats = resp.json()
-        
+            try:
+                resp = await client.get(f"{MEMORY_API_URL}/chats/active", timeout=10.0)
+                if resp.status_code == 200:
+                    active_chats = resp.json()
+            except Exception as e:
+                logger.error(f"Failed to fetch active chats: {e}")
+                
         logger.info(f"Found {len(active_chats)} active chats.")
         
         for chat_id in active_chats:
             # 2. Get 24h History
             async with httpx.AsyncClient() as client:
-                resp = await client.get(f"{MEMORY_API_URL}/context/{chat_id}", params={"hours": 24, "limit": 1000})
-                if resp.status_code != 200: continue
-                history = resp.json().get("history", [])
+                try:
+                    resp = await client.get(f"{MEMORY_API_URL}/context/{chat_id}", params={"hours": 24, "limit": 1000}, timeout=10.0)
+                    if resp.status_code != 200: continue
+                    history = resp.json().get("history", [])
+                except Exception:
+                    continue
             
             if not history: continue
             logger.info(f"Processing {len(history)} messages for chat {chat_id}")
@@ -110,20 +126,22 @@ async def run_archivist_job():
     
     logger.info("Job Complete.")
 
-if __name__ == "__main__":
-    scheduler = AsyncIOScheduler()
-    # Schedule at 03:00 AM UTC (or configurable TZ)
+@app.on_event("startup")
+async def startup():
+    await start_log_handler()
+    # Schedule at 03:00 AM UTC
     scheduler.add_job(run_archivist_job, 'cron', hour=3, minute=0)
-    
-    logger.info("Mishka Archivist started (Schedule: 03:00)")
-    
-    # Run once on startup for debug/demo if DEV_MODE is on?
-    # Or just wait. Let's make it runnable manually via trigger if we want?
-    # For now, just schedule.
-    
     scheduler.start()
-    
-    try:
-        asyncio.get_event_loop().run_forever()
-    except (KeyboardInterrupt, SystemExit):
-        pass
+    logger.info("Mishka Archivist started (Schedule: 03:00)")
+
+@app.on_event("shutdown")
+async def shutdown():
+    scheduler.shutdown()
+    await stop_log_handler()
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)

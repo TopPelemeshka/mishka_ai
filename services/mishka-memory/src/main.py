@@ -11,8 +11,11 @@ import httpx
 import os
 from pydantic import BaseModel
 from src.qdrant import qdrant_manager
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
 
 LLM_EMBEDDING_URL = os.getenv("LLM_EMBEDDING_URL", "http://mishka-llm-provider:8000/v1/embeddings")
+
+setup_logger()
 
 class FactRequest(BaseModel):
     text: str
@@ -26,6 +29,7 @@ app = FastAPI()
 
 @app.on_event("startup")
 async def startup():
+    await start_log_handler()
     await init_db()
     await redis_manager.connect()
     from src.config_manager import config_manager
@@ -34,6 +38,7 @@ async def startup():
 @app.on_event("shutdown")
 async def shutdown():
     await redis_manager.close()
+    await stop_log_handler()
 
 @app.get("/health")
 async def health():

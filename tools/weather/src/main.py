@@ -1,8 +1,19 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import httpx
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
 
 app = FastAPI(title="Mishka Weather Tool")
+
+setup_logger()
+
+@app.on_event("startup")
+async def startup():
+    await start_log_handler()
+
+@app.on_event("shutdown")
+async def shutdown():
+    await stop_log_handler()
 
 class WeatherRequest(BaseModel):
     city: str

@@ -20,6 +20,8 @@ services:
         condition: service_started
       mishka-memory:
         condition: service_started
+      mishka-admin-backend:
+        condition: service_started
 
   mishka-admin-backend:
     build:
@@ -43,7 +45,6 @@ services:
     volumes:
       - ./services/mishka-admin-backend:/app
     depends_on:
-      - mishka-brain
       - mishka-memory
 
   mishka-frontend:

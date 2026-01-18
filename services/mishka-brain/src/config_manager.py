@@ -16,7 +16,8 @@ class ConfigManager:
     async def initialize(self):
         # 1. Load from Admin Backend
         # 1. Load from Admin Backend (with retries)
-        admin_url = "http://mishka-admin-backend:8080/internal/configs/" + self.service_name
+        base_url = os.getenv("ADMIN_BACKEND_URL", "http://mishka-admin-backend:8080")
+        admin_url = f"{base_url}/internal/configs/{self.service_name}"
         
         for attempt in range(5):
             try:

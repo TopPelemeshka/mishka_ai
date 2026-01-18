@@ -7,7 +7,9 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "httpx",
-    "pydantic"
+    "pydantic",
+    "loguru",
+    "aio-pika"
 ]
 
 [project.optional-dependencies]

@@ -3,6 +3,7 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Settings from './pages/Settings'
 import PersonalityPage from './pages/Personality'
+import MonitoringPage from './pages/Monitoring'
 
 // Protected Route Component
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -39,6 +40,14 @@ function App() {
                     element={
                         <ProtectedRoute>
                             <PersonalityPage />
+                        </ProtectedRoute>
+                    }
+                />
+                <Route
+                    path="/monitoring"
+                    element={
+                        <ProtectedRoute>
+                            <MonitoringPage />
                         </ProtectedRoute>
                     }
                 />

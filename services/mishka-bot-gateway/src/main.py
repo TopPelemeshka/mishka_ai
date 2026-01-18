@@ -1,17 +1,20 @@
 import asyncio
-import logging
 import sys
+from loguru import logger
 from src.bot import dp, bot, send_message_to_user
 from src.rmq import rmq
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, stream=sys.stdout)
-logger = logging.getLogger(__name__)
+setup_logger()
 
 async def main():
     if not bot:
         logger.error("Bot token not configured. Exiting.")
         return
+
+    # Start Logging
+    await start_log_handler()
 
     # Connect to RabbitMQ
     logger.info("Connecting to RabbitMQ...")
@@ -28,6 +31,7 @@ async def main():
     finally:
         await rmq.close()
         await bot.session.close()
+        await stop_log_handler()
 
 if __name__ == "__main__":
     try:

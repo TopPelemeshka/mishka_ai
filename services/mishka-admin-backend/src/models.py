@@ -12,3 +12,24 @@ class DynamicConfig(Base):
     type = Column(String, default="string") # string, int, float, bool, json
     
     # Composite unique constraint could be useful, but for MVP simple index is enough with logic checks.
+
+from datetime import datetime
+from sqlalchemy import DateTime
+
+class ServiceHealth(Base):
+    __tablename__ = "service_health"
+    
+    service_name = Column(String, primary_key=True)
+    status = Column(String) # "healthy", "unhealthy", "offline"
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    details = Column(Text, nullable=True) # JSON details
+
+class SystemError(Base):
+    __tablename__ = "system_errors"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    service = Column(String)
+    level = Column(String)
+    message = Column(Text)
+    traceback = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

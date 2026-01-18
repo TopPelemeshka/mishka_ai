@@ -127,17 +127,7 @@ async def update_tool_config(name: str, config: dict, admin: Annotated[dict, Dep
     # Mock update
     return {"status": "updated", "tool": name}
 
-@app.on_event("startup")
-async def startup():
-    from src.database import init_db
-    from src.events import producer
-    await init_db()
-    await producer.connect()
 
-@app.on_event("shutdown")
-async def shutdown():
-    from src.events import producer
-    await producer.close()
 
 # --- Configuration Routes ---
 from src.database import get_db
@@ -313,3 +303,53 @@ async def rollback_evolution(p_id: str, payload: dict, admin: Annotated[dict, De
             return resp.json()
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Personality Service Error: {e}")
+
+# --- Monitoring Routes ---
+from src.models import ServiceHealth, SystemError
+from sqlalchemy import desc
+
+@app.get("/monitoring/health")
+async def get_health_status(current_user: Annotated[dict, Depends(get_current_user)], db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(ServiceHealth))
+    return result.scalars().all()
+
+@app.get("/monitoring/errors")
+async def get_system_errors(
+    current_user: Annotated[dict, Depends(get_current_user)], 
+    limit: int = 50, 
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(
+        select(SystemError).order_by(desc(SystemError.created_at)).limit(limit)
+    )
+    return result.scalars().all()
+
+# --- Startup ---
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from src.monitoring import check_health, start_error_consumer
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
+
+setup_logger()
+
+scheduler = AsyncIOScheduler()
+
+@app.on_event("startup")
+async def startup():
+    await start_log_handler()
+    from src.database import init_db
+    from src.events import producer
+    await init_db()
+    await producer.connect()
+    
+    # Start Monitoring
+    await start_error_consumer()
+    
+    scheduler.add_job(check_health, 'interval', seconds=30)
+    scheduler.start()
+
+@app.on_event("shutdown")
+async def shutdown():
+    from src.events import producer
+    await producer.close()
+    scheduler.shutdown()
+    await stop_log_handler()

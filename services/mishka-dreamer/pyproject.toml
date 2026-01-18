@@ -7,7 +7,9 @@ dependencies = [
     "httpx",
     "apscheduler",
     "loguru",
-    "pydantic",
+    "numpy",
     "python-dotenv",
-    "numpy"
+    "fastapi",
+    "uvicorn",
+    "aio-pika"
 ]

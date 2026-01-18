@@ -7,8 +7,10 @@ dependencies = [
     "aiogram>=3.0.0",
     "aio-pika",
     "python-dotenv",
+    "python-dotenv",
     "uvicorn",
-    "fastapi" 
+    "fastapi",
+    "loguru"
 ]
 
 [project.optional-dependencies]

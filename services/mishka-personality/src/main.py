@@ -8,6 +8,9 @@ import uuid
 from src.database import get_db, engine, Base
 from src.models import Personality, EvolutionLog
 from src.schemas import PersonalityCreate, PersonalityResponse, EvolutionLogResponse, CurrentPromptResponse, EvolveRequest
+from src.log_handler import setup_logger, start_log_handler, stop_log_handler
+
+setup_logger()
 
 app = FastAPI(title="Mishka Personality Service")
 
@@ -15,6 +18,7 @@ app = FastAPI(title="Mishka Personality Service")
 
 @app.on_event("startup")
 async def startup_event():
+    await start_log_handler()
     # Create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
